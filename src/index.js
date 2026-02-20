@@ -62,6 +62,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 SteaMates server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 SteaMates server running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
 });
