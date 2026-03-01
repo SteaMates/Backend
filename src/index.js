@@ -8,6 +8,7 @@ import { configureSteamStrategy } from './config/passport.js';
 import authRoutes from './routes/auth.js';
 import chatRoutes from './routes/chat.js';
 import steamRoutes from './routes/steam.js';
+import statsRoutes from './routes/stats.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -57,6 +58,7 @@ app.use(passport.session());
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/steam', steamRoutes);
+app.use('/api/steam/stats', statsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
