@@ -240,6 +240,9 @@ router.get("/achievements/:steamId", async (req, res) => {
           const unlocked = achievements.filter((a) => a.achieved === 1);
           const locked = achievements.filter((a) => a.achieved === 0);
 
+          totalAchievements += achievements.length;
+          totalUnlocked += unlocked.length;
+
           if (unlocked.length === achievements.length) {
             perfectGames++;
           }

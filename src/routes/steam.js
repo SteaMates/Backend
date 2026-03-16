@@ -1,4 +1,5 @@
 import { Router } from "express";
+import GameCache from "../models/GameCache.js";
 
 const router = Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
@@ -95,9 +96,39 @@ router.get("/games/:steamId", async (req, res) => {
     // Sort by playtime descending
     games.sort((a, b) => b.playtime - a.playtime);
 
+    let libraryValue = 0;
+    try {
+      const appIds = games.map((g) => g.appId);
+      const cachedGames = await GameCache.find({ appId: { $in: appIds } });
+      cachedGames.forEach((cg) => {
+        if (!cg.isFree && cg.price) {
+          libraryValue += cg.price;
+        }
+      });
+      // Conservative estimate for uncached games:
+      // Assuming missing games average at around €10
+      const missingCount = games.length - cachedGames.length;
+      if (missingCount > 0) {
+        libraryValue += missingCount * 10;
+      }
+    } catch (e) {
+      console.error("Error computing library value:", e);
+    }
+
+    if (libraryValue === 0 && games.length > 0) {
+      // Fallback robusto en caso de que GameCache o Mongo fallen
+      libraryValue = games.length * 15;
+    }
+
+    if (libraryValue === 0 && games.length > 0) {
+      // Fallback robusto en caso de que GameCache o Mongo fallen
+      libraryValue = games.length * 15;
+    }
+
     res.json({
       totalCount: data.response?.game_count || 0,
       games,
+      libraryValue: Math.round(libraryValue),
     });
   } catch (error) {
     console.error("Steam games error:", error);
@@ -110,20 +141,22 @@ router.get("/search", async (req, res) => {
   try {
     const { term } = req.query;
     if (!term) return res.json([]);
-    
+
     // Using Steam storefront API to search games (no API key required)
-    const response = await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&l=spanish&cc=ES`);
+    const response = await fetch(
+      `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&l=spanish&cc=ES`,
+    );
     const data = await response.json();
-    
+
     if (!data.items) {
       return res.json([]);
     }
 
-    const games = data.items.map(item => ({
+    const games = data.items.map((item) => ({
       appId: item.id,
       name: item.name,
-      price: item.price ? (item.price / 100).toFixed(2) + '€' : 'Free',
-      tinyImage: item.tiny_image
+      price: item.price ? (item.price / 100).toFixed(2) + "€" : "Free",
+      tinyImage: item.tiny_image,
     }));
 
     res.json(games);
