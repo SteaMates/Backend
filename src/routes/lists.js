@@ -1,19 +1,12 @@
 import express from 'express';
 import GameList from '../models/GameList.js';
 import User from '../models/User.js';
+import { verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Middleware to check if user is authenticated
-const isAuthenticated = (req, res, next) => {
-  if (req.isAuthenticated && req.isAuthenticated()) {
-    return next();
-  }
-  return res.status(401).json({ error: 'Unauthorized. Please log in.' });
-};
-
 // POST /api/lists - Create a new game list
-router.post('/', isAuthenticated, async (req, res) => {
+router.post('/', verifyToken, async (req, res) => {
   try {
     const { title, description, categories, coverImage, games } = req.body;
     
