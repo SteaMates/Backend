@@ -38,7 +38,7 @@ app.use(cors({
 app.use(express.json());
 
 // Session (required for Passport Steam)
-// With Vercel proxy, cookies are same-site so sameSite:'lax' is sufficient and more secure
+app.set('trust proxy', 1); // Trust first proxy (Render, Vercel)
 app.use(session({
   secret: process.env.SESSION_SECRET || 'steamates-secret-key',
   resave: false,
@@ -46,7 +46,7 @@ app.use(session({
   cookie: {
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   },
 }));
 
