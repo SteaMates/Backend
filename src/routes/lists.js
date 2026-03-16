@@ -41,8 +41,16 @@ router.get('/', async (req, res) => {
   try {
     const lists = await GameList.find()
       .populate('author', 'username avatar steamId')
+      .lean()
       .sort({ createdAt: -1 });
-    res.json(lists);
+      
+    // Attach comment counts
+    const listsWithComments = await Promise.all(lists.map(async (list) => {
+      const count = await Comment.countDocuments({ list: list._id });
+      return { ...list, commentsCount: count };
+    }));
+      
+    res.json(listsWithComments);
   } catch (error) {
     console.error('Error fetching lists:', error);
     res.status(500).json({ error: 'Failed to fetch game lists' });
