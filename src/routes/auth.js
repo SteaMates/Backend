@@ -22,6 +22,7 @@ router.get('/steam/callback',
     // Redirect to frontend with token and user data
     const params = new URLSearchParams({
       token, // <-- Passing token to frontend safely via callback
+      id: user._id.toString(),
       steamId: user.steamId,
       username: user.username,
       avatar: user.avatar || '',
