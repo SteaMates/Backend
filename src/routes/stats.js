@@ -202,13 +202,15 @@ router.get("/achievements/:steamId", async (req, res) => {
       return res.status(503).json({ error: "Steam API key not configured" });
 
     const games = await fetchOwnedGames(req.params.steamId);
-    if (games.length === 0) {
+    if (!games || games.length === 0) {
       return res.json({
         completionRate: 0,
         perfectGames: 0,
         totalGamesPlayed: 0,
         totalAchievements: 0,
         rarestAchievement: null,
+        rarestAchievementsList: [],
+        recentAchievementsList: [],
       });
     }
 
@@ -291,6 +293,11 @@ router.get("/achievements/:steamId", async (req, res) => {
     allUnlockedAchievements.sort((a, b) => a.globalPercent - b.globalPercent);
     const rarestArray = allUnlockedAchievements.slice(0, 4);
 
+    // Also get recent achievements
+    const recentArray = [...allUnlockedAchievements]
+      .sort((a, b) => (b.unlockTime || 0) - (a.unlockTime || 0))
+      .slice(0, 4);
+
     const completionRate =
       totalAchievements > 0
         ? Math.round((totalUnlocked / totalAchievements) * 100)
@@ -303,6 +310,7 @@ router.get("/achievements/:steamId", async (req, res) => {
       totalAchievements: totalUnlocked,
       rarestAchievement,
       rarestAchievementsList: rarestArray,
+      recentAchievementsList: recentArray,
     });
   } catch (error) {
     console.error("Stats achievements error:", error);
