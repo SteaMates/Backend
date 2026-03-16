@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import session from 'express-session';
+import MongoStore from 'connect-mongo';
 import passport from 'passport';
 import { connectDB } from './config/database.js';
 import { configureSteamStrategy } from './config/passport.js';
@@ -40,6 +41,11 @@ app.use(express.json());
 // Session (required for Passport Steam)
 app.set('trust proxy', 1); // Trust first proxy (Render, Vercel)
 app.use(session({
+  store: MongoStore.create({ 
+    mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/steamates',
+    collectionName: 'sessions', // This will create a 'sessions' collection automatically
+    ttl: 24 * 60 * 60 // 1 day
+  }),
   secret: process.env.SESSION_SECRET || 'steamates-secret-key',
   resave: false,
   saveUninitialized: false,
