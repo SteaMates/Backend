@@ -225,6 +225,7 @@ router.get("/achievements/:steamId", async (req, res) => {
     let perfectGames = 0;
     let rarestAchievement = null;
     let allUnlockedAchievements = [];
+    let allLockedAchievements = [];
 
     for (const game of topGames) {
       try {
@@ -237,8 +238,7 @@ router.get("/achievements/:steamId", async (req, res) => {
 
         if (achievements.length > 0) {
           const unlocked = achievements.filter((a) => a.achieved === 1);
-          totalAchievements += achievements.length;
-          totalUnlocked += unlocked.length;
+          const locked = achievements.filter((a) => a.achieved === 0);
 
           if (unlocked.length === achievements.length) {
             perfectGames++;
@@ -287,6 +287,18 @@ router.get("/achievements/:steamId", async (req, res) => {
           }
         }
 
+        if (locked && locked.length > 0) {
+          for (const ach of locked) {
+            allLockedAchievements.push({
+              name: ach.name || ach.apiname,
+              game: game.name,
+              globalPercent: null,
+              unlockTime: 0,
+              unlocked: false,
+            });
+          }
+        }
+
         // Small delay
         await new Promise((r) => setTimeout(r, 300));
       } catch {
@@ -302,9 +314,14 @@ router.get("/achievements/:steamId", async (req, res) => {
       .slice(0, 4);
 
     // Also get recent achievements (fallback if rarest fails or no rarely achieved logs)
-    const recentArray = [...allUnlockedAchievements]
+    let recentArray = [...allUnlockedAchievements]
       .sort((a, b) => (b.unlockTime || 0) - (a.unlockTime || 0))
       .slice(0, 4);
+
+    if (recentArray.length === 0) {
+      // If entirely zero unlocked achievements, use locked game achievements
+      recentArray = [...allLockedAchievements].slice(0, 4);
+    }
 
     const completionRate =
       totalAchievements > 0
