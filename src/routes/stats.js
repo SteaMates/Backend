@@ -245,30 +245,38 @@ router.get("/achievements/:steamId", async (req, res) => {
           }
 
           // Try to get global achievement percentages for rarest
+          let globalPercentages = {};
           try {
             const globalRes = await fetch(
               `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/?gameid=${game.appid}`,
             );
             const globalData = await globalRes.json();
-            const globalPercentages = {};
             (globalData.achievementpercentages?.achievements || []).forEach(
               (a) => {
                 globalPercentages[a.name] = a.percent;
               },
             );
+          } catch {
+            // Ignore global stats errors
+          }
 
-            for (const ach of unlocked) {
-              const globalPercent = globalPercentages[ach.apiname] || 100;
+          for (const ach of unlocked) {
+            // If we don't have the global percent, we can set it to null or 100
+            const globalPercent = globalPercentages[ach.apiname];
 
-              const achDetails = {
-                name: ach.name || ach.apiname,
-                game: game.name,
-                globalPercent: Math.round(globalPercent * 10) / 10,
-                unlockTime: ach.unlocktime,
-              };
+            const achDetails = {
+              name: ach.name || ach.apiname,
+              game: game.name,
+              globalPercent:
+                globalPercent !== undefined
+                  ? Math.round(globalPercent * 10) / 10
+                  : null,
+              unlockTime: ach.unlocktime,
+            };
 
-              allUnlockedAchievements.push(achDetails);
+            allUnlockedAchievements.push(achDetails);
 
+            if (globalPercent !== undefined) {
               if (
                 !rarestAchievement ||
                 globalPercent < rarestAchievement.globalPercent
@@ -276,8 +284,6 @@ router.get("/achievements/:steamId", async (req, res) => {
                 rarestAchievement = achDetails;
               }
             }
-          } catch {
-            // Ignore global stats errors
           }
         }
 
@@ -289,11 +295,13 @@ router.get("/achievements/:steamId", async (req, res) => {
       }
     }
 
-    // Sort all unlocked by global rarity (rarest first) and take top 4
-    allUnlockedAchievements.sort((a, b) => a.globalPercent - b.globalPercent);
-    const rarestArray = allUnlockedAchievements.slice(0, 4);
+    // Filter out items without globalPercent, sort by global rarity (rarest first) and take top 4
+    const rarestArray = allUnlockedAchievements
+      .filter((a) => a.globalPercent !== null)
+      .sort((a, b) => a.globalPercent - b.globalPercent)
+      .slice(0, 4);
 
-    // Also get recent achievements
+    // Also get recent achievements (fallback if rarest fails or no rarely achieved logs)
     const recentArray = [...allUnlockedAchievements]
       .sort((a, b) => (b.unlockTime || 0) - (a.unlockTime || 0))
       .slice(0, 4);
