@@ -250,4 +250,63 @@ router.get("/recent/:steamId", async (req, res) => {
   }
 });
 
+// POST /api/steam/games-info - Get genres and details for matching items
+router.post("/games-info", async (req, res) => {
+  try {
+    const { appIds } = req.body;
+    if (!appIds || !Array.isArray(appIds)) {
+      return res.status(400).json({ error: "appIds must be an array" });
+    }
+
+    // Buscar en caché primero
+    const cachedGames = await GameCache.find({ appId: { $in: appIds } });
+    const cachedMap = {};
+    cachedGames.forEach((g) => {
+      cachedMap[g.appId] = g;
+    });
+
+    const missingIds = appIds.filter((id) => id && !cachedMap[id]);
+    
+    // Limits: Solo consultamos hasta 8 a la vez para no recibir Rate Limits severos de Steam.
+    const toFetch = missingIds.slice(0, 8);
+
+    for (const appId of toFetch) {
+      try {
+        const response = await fetch(
+          `https://store.steampowered.com/api/appdetails?appids=${appId}&l=spanish`
+        );
+        const data = await response.json();
+        
+        if (data && data[appId] && data[appId].success) {
+          const details = data[appId].data;
+          const genres = details.genres ? details.genres.map((g) => g.description) : [];
+          
+          const newCache = await GameCache.findOneAndUpdate(
+            { appId: appId },
+            {
+              appId: appId,
+              name: details.name,
+              genres: genres,
+              isFree: details.is_free,
+              price: details.price_overview ? details.price_overview.final / 100 : 0,
+              headerImage: details.header_image,
+              lastUpdated: new Date()
+            },
+            { upsert: true, new: true }
+          );
+          cachedMap[appId] = newCache;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      } catch (err) {
+        console.error("Steam app metadata error for " + appId, err);
+      }
+    }
+
+    res.json(cachedMap);
+  } catch (error) {
+    console.error("Games-info error:", error);
+    res.status(500).json({ error: "Error fetching game information" });
+  }
+});
+
 export default router;
