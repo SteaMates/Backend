@@ -105,6 +105,34 @@ router.get("/games/:steamId", async (req, res) => {
   }
 });
 
+// GET /api/steam/search - Search for Steam games
+router.get("/search", async (req, res) => {
+  try {
+    const { term } = req.query;
+    if (!term) return res.json([]);
+    
+    // Using Steam storefront API to search games (no API key required)
+    const response = await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&l=spanish&cc=ES`);
+    const data = await response.json();
+    
+    if (!data.items) {
+      return res.json([]);
+    }
+
+    const games = data.items.map(item => ({
+      appId: item.id,
+      name: item.name,
+      price: item.price ? (item.price / 100).toFixed(2) + '€' : 'Free',
+      tinyImage: item.tiny_image
+    }));
+
+    res.json(games);
+  } catch (error) {
+    console.error("Steam search error:", error);
+    res.status(500).json({ error: "Error searching games" });
+  }
+});
+
 // GET /api/steam/friends/:steamId - Get friends list
 router.get("/friends/:steamId", async (req, res) => {
   try {
