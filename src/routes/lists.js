@@ -1,6 +1,7 @@
 import express from 'express';
 import GameList from '../models/GameList.js';
 import User from '../models/User.js';
+import Comment from '../models/Comment.js';
 import { verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -62,6 +63,96 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error fetching list details:', error);
     res.status(500).json({ error: 'Failed to fetch game list' });
+  }
+});
+
+// --- COMMENTS ---
+
+// GET /api/lists/:id/comments
+router.get('/:id/comments', async (req, res) => {
+  try {
+    const comments = await Comment.find({ list: req.params.id })
+      .populate('author', 'username avatar')
+      .sort({ createdAt: -1 });
+    res.json(comments);
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+// POST /api/lists/:id/comments
+router.post('/:id/comments', verifyToken, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ error: 'Content is required' });
+
+    const newComment = new Comment({
+      author: req.user._id,
+      list: req.params.id,
+      content
+    });
+    const saved = await newComment.save();
+    await saved.populate('author', 'username avatar');
+    
+    res.status(201).json(saved);
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    res.status(500).json({ error: 'Failed to add comment' });
+  }
+});
+
+// --- LIKES / DISLIKES ---
+
+router.post('/:id/like', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const list = await GameList.findById(req.params.id);
+    
+    if (!list) return res.status(404).json({ error: 'List not found' });
+
+    // Remove from dislikes if present
+    list.dislikes = list.dislikes.filter(id => id.toString() !== userId.toString());
+    
+    // Toggle like
+    const liked = list.likes.some(id => id.toString() === userId.toString());
+    if (liked) {
+      list.likes = list.likes.filter(id => id.toString() !== userId.toString());
+    } else {
+      list.likes.push(userId);
+    }
+    
+    await list.save();
+    res.json({ likes: list.likes, dislikes: list.dislikes });
+  } catch (error) {
+    console.error('Error toggling like:', error);
+    res.status(500).json({ error: 'Failed to toggle like' });
+  }
+});
+
+router.post('/:id/dislike', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const list = await GameList.findById(req.params.id);
+    
+    if (!list) return res.status(404).json({ error: 'List not found' });
+
+    // Remove from likes if present
+    list.likes = list.likes.filter(id => id.toString() !== userId.toString());
+    
+    // Toggle dislike
+    const disliked = list.dislikes.some(id => id.toString() === userId.toString());
+    if (disliked) {
+      list.dislikes = list.dislikes.filter(id => id.toString() !== userId.toString());
+    } else {
+      list.dislikes.push(userId);
+    }
+    
+    await list.save();
+    res.json({ likes: list.likes, dislikes: list.dislikes });
+  } catch (error) {
+    console.error('Error toggling dislike:', error);
+    res.status(500).json({ error: 'Failed to toggle dislike' });
   }
 });
 
