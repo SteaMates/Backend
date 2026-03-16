@@ -48,4 +48,21 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/lists/:id - Get a single list
+router.get('/:id', async (req, res) => {
+  try {
+    const list = await GameList.findById(req.params.id)
+      .populate('author', 'username avatar steamId');
+    
+    if (!list) {
+      return res.status(404).json({ error: 'List not found' });
+    }
+    
+    res.json(list);
+  } catch (error) {
+    console.error('Error fetching list details:', error);
+    res.status(500).json({ error: 'Failed to fetch game list' });
+  }
+});
+
 export default router;
