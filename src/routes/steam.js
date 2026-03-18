@@ -10,6 +10,17 @@ function getSteamApiKey() {
   return key;
 }
 
+async function fetchOwnedGames(steamId) {
+  const apiKey = getSteamApiKey();
+  if (!apiKey) return [];
+
+  const response = await fetch(
+    `${STEAM_API_BASE}/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamId}&include_appinfo=1&include_played_free_games=1&format=json`,
+  );
+  const data = await response.json();
+  return data.response?.games || [];
+}
+
 // GET /api/steam/profile/:steamId - Get Steam user profile
 router.get("/profile/:steamId", async (req, res) => {
   try {
@@ -29,7 +40,6 @@ router.get("/profile/:steamId", async (req, res) => {
       return res.status(404).json({ error: "Player not found" });
     }
 
-    // Get Badges & Level
     let level = 0;
     let xpCurrent = 0;
     let xpTotal = 1;
@@ -55,13 +65,13 @@ router.get("/profile/:steamId", async (req, res) => {
       avatar: player.avatarfull,
       profileUrl: player.profileurl,
       realName: player.realname || "",
-      status: player.personastate, // 0=Offline, 1=Online, 2=Busy, 3=Away, 4=Snooze, 5=Trade, 6=Play
+      status: player.personastate,
       lastLogoff: player.lastlogoff,
       memberSince: player.timecreated,
       level,
       xpCurrent,
       xpTotal,
-      gameId: player.gameid || null, // Currently playing
+      gameId: player.gameid || null,
       gameExtraInfo: player.gameextrainfo || null,
     });
   } catch (error) {
@@ -87,13 +97,12 @@ router.get("/games/:steamId", async (req, res) => {
     const games = (data.response?.games || []).map((game) => ({
       appId: game.appid,
       name: game.name,
-      playtime: game.playtime_forever, // minutes
+      playtime: game.playtime_forever,
       lastPlayed: game.rtime_last_played,
       icon: `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_icon_url}.jpg`,
       logo: `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_logo_url}.jpg`,
     }));
 
-    // Sort by playtime descending
     games.sort((a, b) => b.playtime - a.playtime);
 
     let libraryValue = 0;
@@ -105,8 +114,7 @@ router.get("/games/:steamId", async (req, res) => {
           libraryValue += cg.price;
         }
       });
-      // Conservative estimate for uncached games:
-      // Assuming missing games average at around €10
+
       const missingCount = games.length - cachedGames.length;
       if (missingCount > 0) {
         libraryValue += missingCount * 10;
@@ -116,12 +124,6 @@ router.get("/games/:steamId", async (req, res) => {
     }
 
     if (libraryValue === 0 && games.length > 0) {
-      // Fallback robusto en caso de que GameCache o Mongo fallen
-      libraryValue = games.length * 15;
-    }
-
-    if (libraryValue === 0 && games.length > 0) {
-      // Fallback robusto en caso de que GameCache o Mongo fallen
       libraryValue = games.length * 15;
     }
 
@@ -142,7 +144,6 @@ router.get("/search", async (req, res) => {
     const { term } = req.query;
     if (!term) return res.json([]);
 
-    // Using Steam storefront API to search games (no API key required)
     const response = await fetch(
       `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&l=spanish&cc=ES`,
     );
@@ -176,7 +177,6 @@ router.get("/friends/:steamId", async (req, res) => {
 
     const { steamId } = req.params;
 
-    // Get friends list
     const friendsResponse = await fetch(
       `${STEAM_API_BASE}/ISteamUser/GetFriendList/v0001/?key=${apiKey}&steamid=${steamId}&relationship=friend`,
     );
@@ -187,11 +187,11 @@ router.get("/friends/:steamId", async (req, res) => {
       return res.json({ friends: [] });
     }
 
-    // Get profile details for all friends (batch up to 100)
     const friendIds = friendsList
       .slice(0, 100)
       .map((f) => f.steamid)
       .join(",");
+
     const profilesResponse = await fetch(
       `${STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v0002/?key=${apiKey}&steamids=${friendIds}`,
     );
@@ -204,11 +204,9 @@ router.get("/friends/:steamId", async (req, res) => {
       avatar: p.avatarfull,
       status: p.personastate,
       currentGame: p.gameextrainfo || null,
-      friendSince: friendsList.find((f) => f.steamid === p.steamid)
-        ?.friend_since,
+      friendSince: friendsList.find((f) => f.steamid === p.steamid)?.friend_since,
     }));
 
-    // Sort: online/ingame first, then offline
     friends.sort((a, b) => (b.status > 0 ? 1 : 0) - (a.status > 0 ? 1 : 0));
 
     res.json({ friends });
@@ -235,7 +233,7 @@ router.get("/recent/:steamId", async (req, res) => {
     const games = (data.response?.games || []).map((game) => ({
       appId: game.appid,
       name: game.name,
-      playtime2Weeks: game.playtime_2weeks, // minutes last 2 weeks
+      playtime2Weeks: game.playtime_2weeks,
       playtimeForever: game.playtime_forever,
       icon: `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_icon_url}.jpg`,
     }));
@@ -250,6 +248,60 @@ router.get("/recent/:steamId", async (req, res) => {
   }
 });
 
+// POST /api/steam/common-games - Get common owned games between a group
+router.post("/common-games", async (req, res) => {
+  try {
+    const apiKey = getSteamApiKey();
+    if (!apiKey) {
+      return res.status(503).json({ error: "Steam API key not configured" });
+    }
+
+    const { steamIds } = req.body;
+
+    if (!Array.isArray(steamIds) || steamIds.length < 2) {
+      return res
+        .status(400)
+        .json({ error: "steamIds must contain at least 2 ids" });
+    }
+
+    const uniqueSteamIds = [...new Set(steamIds)].filter(Boolean).slice(0, 6);
+
+    const ownedGamesPerUser = [];
+    for (const steamId of uniqueSteamIds) {
+      const games = await fetchOwnedGames(steamId);
+      ownedGamesPerUser.push(games);
+    }
+
+    if (ownedGamesPerUser.length === 0 || !ownedGamesPerUser[0]?.length) {
+      return res.json({ games: [] });
+    }
+
+    const appSets = ownedGamesPerUser.map(
+      (games) => new Set(games.map((g) => g.appid)),
+    );
+
+    const firstGames = ownedGamesPerUser[0];
+    const commonGames = firstGames.filter((game) =>
+      appSets.every((set) => set.has(game.appid)),
+    );
+
+    const games = commonGames
+      .map((game) => ({
+        appid: game.appid,
+        name: game.name,
+        headerImage: `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg`,
+        owners: uniqueSteamIds.length,
+        lastPlayed: game.rtime_last_played || 0,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+
+    res.json({ games });
+  } catch (error) {
+    console.error("Common games error:", error);
+    res.status(500).json({ error: "Error fetching common games" });
+  }
+});
+
 // POST /api/steam/games-info - Get genres and details for matching items
 router.post("/games-info", async (req, res) => {
   try {
@@ -258,7 +310,6 @@ router.post("/games-info", async (req, res) => {
       return res.status(400).json({ error: "appIds must be an array" });
     }
 
-    // Buscar en caché primero
     const cachedGames = await GameCache.find({ appId: { $in: appIds } });
     const cachedMap = {};
     cachedGames.forEach((g) => {
@@ -266,21 +317,21 @@ router.post("/games-info", async (req, res) => {
     });
 
     const missingIds = appIds.filter((id) => id && !cachedMap[id]);
-    
-    // Limits: Solo consultamos hasta 8 a la vez para no recibir Rate Limits severos de Steam.
     const toFetch = missingIds.slice(0, 8);
 
     for (const appId of toFetch) {
       try {
         const response = await fetch(
-          `https://store.steampowered.com/api/appdetails?appids=${appId}&l=spanish`
+          `https://store.steampowered.com/api/appdetails?appids=${appId}&l=spanish`,
         );
         const data = await response.json();
-        
+
         if (data && data[appId] && data[appId].success) {
           const details = data[appId].data;
-          const genres = details.genres ? details.genres.map((g) => g.description) : [];
-          
+          const genres = details.genres
+            ? details.genres.map((g) => g.description)
+            : [];
+
           const newCache = await GameCache.findOneAndUpdate(
             { appId: appId },
             {
@@ -288,14 +339,17 @@ router.post("/games-info", async (req, res) => {
               name: details.name,
               genres: genres,
               isFree: details.is_free,
-              price: details.price_overview ? details.price_overview.final / 100 : 0,
+              price: details.price_overview
+                ? details.price_overview.final / 100
+                : 0,
               headerImage: details.header_image,
-              lastUpdated: new Date()
+              lastUpdated: new Date(),
             },
-            { upsert: true, new: true }
+            { upsert: true, new: true },
           );
           cachedMap[appId] = newCache;
         }
+
         await new Promise((resolve) => setTimeout(resolve, 300));
       } catch (err) {
         console.error("Steam app metadata error for " + appId, err);
