@@ -499,24 +499,18 @@ router.get("/achievements/:steamId", async (req, res) => {
             perfectGames++;
           }
 
-          // Try to get global achievement percentages for rarest
           let globalPercentages = {};
           try {
             const globalRes = await fetch(
               `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/?gameid=${game.appid}`,
             );
             const globalData = await globalRes.json();
-            (globalData.achievementpercentages?.achievements || []).forEach(
-              (a) => {
-                globalPercentages[a.name] = a.percent;
-              },
-            );
-          } catch {
-            // Ignore global stats errors
-          }
+            (globalData.achievementpercentages?.achievements || []).forEach((a) => {
+              globalPercentages[a.name] = a.percent;
+            });
+          } catch {}
 
           for (const ach of unlocked) {
-            // If we don't have the global percent, we can set it to null or 100
             const globalPercent = globalPercentages[ach.apiname];
 
             const achDetails = {
@@ -540,17 +534,17 @@ router.get("/achievements/:steamId", async (req, res) => {
               }
             }
           }
-        }
 
-        if (locked && locked.length > 0) {
-          for (const ach of locked) {
-            allLockedAchievements.push({
-              name: ach.name || ach.apiname,
-              game: game.name,
-              globalPercent: null,
-              unlockTime: 0,
-              unlocked: false,
-            });
+          if (locked.length > 0) {
+            for (const ach of locked) {
+              allLockedAchievements.push({
+                name: ach.name || ach.apiname,
+                game: game.name,
+                globalPercent: null,
+                unlockTime: 0,
+                unlocked: false,
+              });
+            }
           }
         }
 
