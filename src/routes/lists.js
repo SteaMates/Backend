@@ -74,6 +74,33 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/lists/:id - Delete a list
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    const listId = req.params.id;
+    const userId = req.user._id;
+
+    const list = await GameList.findById(listId);
+    if (!list) {
+      return res.status(404).json({ error: 'List not found' });
+    }
+
+    // Check if the user is the author
+    if (list.author.toString() !== userId.toString()) {
+      return res.status(403).json({ error: 'You are not authorized to delete this list' });
+    }
+
+    await GameList.findByIdAndDelete(listId);
+    // Optionally delete related comments
+    await Comment.deleteMany({ list: listId });
+
+    res.json({ message: 'List deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting list:', error);
+    res.status(500).json({ error: 'Failed to delete list' });
+  }
+});
+
 // --- COMMENTS ---
 
 // GET /api/lists/:id/comments
