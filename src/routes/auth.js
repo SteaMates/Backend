@@ -27,6 +27,8 @@ router.get('/steam/callback',
       username: user.username,
       avatar: user.avatar || '',
       profileUrl: user.profileUrl || '',
+      role: user.role || 'user',
+      isAdmin: String(user.role === 'admin'),
     });
     res.redirect(`${clientUrl}/login?${params.toString()}`);
   }
@@ -42,6 +44,8 @@ router.get('/me', verifyToken, (req, res) => {
       username: req.user.username,
       avatar: req.user.avatar,
       profileUrl: req.user.profileUrl,
+      role: req.user.role || 'user',
+      isAdmin: req.user.role === 'admin',
     },
   });
 });
