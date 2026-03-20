@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { verifyToken } from './auth.js';
+import { verifyToken } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/adminAuth.js';
 import Report from '../models/Report.js';
 import ModerationAction from '../models/ModerationAction.js';
@@ -227,7 +227,7 @@ router.get('/users', verifyToken, requireAdmin, async (req, res) => {
 
     const skip = (page - 1) * limit;
     const users = await User.find(filter)
-      .select('username avatar status moderationHistory createdAt lastLogin')
+      .select('username steamId avatar status moderationHistory createdAt lastLogin')
       .populate('moderationHistory')
       .sort({ createdAt: -1 })
       .skip(skip)
