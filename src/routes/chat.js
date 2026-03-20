@@ -15,6 +15,8 @@ Tus capacidades:
 - Analizar géneros y dar recomendaciones personalizadas basadas en su historial
 - Hablar sobre noticias y tendencias de gaming
 - Ayudar a descubrir juegos indie ocultos similares a los que ya juega
+- Entender el CONTEXTO de lo que el usuario está viendo en pantalla cuando te lo comparte
+// FUTURO: **VER Y ANALIZAR IMÁGENES O CAPTURAS DE PANTALLA** que el usuario comparta (requiere API con modelo de visión)
 
 Reglas:
 - Responde siempre en español
@@ -23,9 +25,10 @@ Reglas:
 - Incluye precios aproximados cuando sea relevante
 - Si no conoces un juego específico, sé honesto
 - Mantén un tono casual y gamer
-- IMPORTANTE: Usa activamente los datos de la biblioteca y amigos del usuario para personalizar tus respuestas
+- Usa los datos de la biblioteca y amigos del usuario para personalizar tus respuestas
 - Cuando recomiendes juegos, ten en cuenta lo que ya tiene y lo que juega más
-- Si el usuario pregunta por juegos cooperativos, mira qué amigos están online y qué juegan`;
+- Si el usuario pregunta por juegos cooperativos, mira qué amigos están online y qué juegan
+- Si el usuario comparte el contexto de su pantalla, usa esa información para dar respuestas más relevantes`;
 
 function getGroqClient() {
   const apiKey = process.env.GROQ_API_KEY;
@@ -160,10 +163,12 @@ async function getSteamContextCached(steamId) {
   return data;
 }
 
-// POST /api/chat/message - Send a message and get AI response
+// POST /api/chat/message - Send a message and get AI response (with optional screen context)
 router.post('/message', async (req, res) => {
   try {
-    const { message, sessionId, userId, steamId } = req.body;
+    const { message, sessionId, userId, steamId, screenContext } = req.body;
+    // FUTURO: Descomentar cuando tengamos modelo de visión
+    // const { message, sessionId, userId, steamId, image } = req.body;
 
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
@@ -171,7 +176,7 @@ router.post('/message', async (req, res) => {
 
     const groq = getGroqClient();
     if (!groq) {
-      return res.status(503).json({ 
+      return res.status(503).json({
         error: 'Groq API key not configured',
         hint: 'Add GROQ_API_KEY to server/.env — get one at https://console.groq.com/keys'
       });
@@ -189,8 +194,19 @@ router.post('/message', async (req, res) => {
       });
     }
 
+    // Build the user message with optional screen context
+    let userMessageContent = message;
+    if (screenContext) {
+      userMessageContent = `${message}\n\n--- CONTEXTO DE PANTALLA ---\n${screenContext}\n--- FIN CONTEXTO ---`;
+    }
+
     // Add user message
-    session.messages.push({ role: 'user', content: message });
+    session.messages.push({
+      role: 'user',
+      content: userMessageContent,
+      // FUTURO: Descomentar cuando tengamos modelo de visión
+      // hasImage: !!image
+    });
 
     // Fetch Steam context for personalized responses
     const steamData = await getSteamContextCached(steamId || userId);
@@ -199,6 +215,50 @@ router.post('/message', async (req, res) => {
 
     // Build messages for Groq (include recent history for context, max 20 messages)
     const recentMessages = session.messages.slice(-20);
+
+    // FUTURO: Cuando tengamos modelo de visión, descomentar este código
+    /*
+    // Determine which model to use based on whether we have an image
+    const hasVision = !!image;
+    const model = hasVision ? 'llama-3.2-90b-vision-preview' : 'llama-3.3-70b-versatile';
+
+    let groqMessages;
+
+    if (hasVision) {
+      // Vision model: use image_url format for the current message
+      groqMessages = [
+        { role: 'system', content: fullSystemPrompt },
+        // Add previous messages (text only)
+        ...recentMessages.slice(0, -1).map(m => ({
+          role: m.role === 'system' ? 'assistant' : m.role,
+          content: m.content,
+        })),
+        // Add current message with image
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: message },
+            {
+              type: 'image_url',
+              image_url: { url: image } // base64 data URL
+            }
+          ]
+        }
+      ];
+    } else {
+      // Text-only model
+      groqMessages = [
+        { role: 'system', content: fullSystemPrompt },
+        ...recentMessages.map(m => ({
+          role: m.role === 'system' ? 'assistant' : m.role,
+          content: m.content,
+        })),
+      ];
+    }
+    */
+
+    // Current implementation: Text-only model
+    const model = 'llama-3.3-70b-versatile';
     const groqMessages = [
       { role: 'system', content: fullSystemPrompt },
       ...recentMessages.map(m => ({
@@ -209,7 +269,7 @@ router.post('/message', async (req, res) => {
 
     // Call Groq API
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model,
       messages: groqMessages,
       temperature: 0.7,
       max_tokens: 1024,
@@ -228,7 +288,7 @@ router.post('/message', async (req, res) => {
     });
   } catch (error) {
     console.error('Chat error:', error);
-    
+
     if (error?.status === 401) {
       return res.status(401).json({ error: 'Invalid Groq API key' });
     }
