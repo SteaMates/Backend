@@ -173,7 +173,7 @@ async function getSteamContextCached(steamId) {
 // POST /api/chat/message - Send a message and get AI response (with optional screen context)
 router.post('/message', async (req, res) => {
   try {
-    const { message, sessionId, userId, steamId, screenContext } = req.body;
+    const { message, sessionId, userId, steamId, screenContext, includeSteamContext } = req.body;
     // FUTURO: Descomentar cuando tengamos modelo de visión
     // const { message, sessionId, userId, steamId, image } = req.body;
 
@@ -215,9 +215,10 @@ router.post('/message', async (req, res) => {
       // hasImage: !!image
     });
 
-    // Fetch Steam context for personalized responses
-    const steamData = await getSteamContextCached(steamId || userId);
-    const steamContext = buildSteamContextPrompt(steamData);
+    // Fetch Steam context ONLY if includeSteamContext is true (default true for backwards compatibility)
+    const shouldIncludeSteam = includeSteamContext !== false;
+    const steamData = shouldIncludeSteam ? await getSteamContextCached(steamId || userId) : null;
+    const steamContext = shouldIncludeSteam ? buildSteamContextPrompt(steamData) : '';
     const fullSystemPrompt = SYSTEM_PROMPT_BASE + steamContext;
 
     // Build messages for Groq (include recent history for context, max 20 messages)
