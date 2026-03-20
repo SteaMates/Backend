@@ -11,6 +11,7 @@ import chatRoutes from './routes/chat.js';
 import steamRoutes from './routes/steam.js';
 import statsRoutes from './routes/stats.js';
 import listsRoutes from './routes/lists.js';
+import moderationRoutes from './routes/moderation.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -68,6 +69,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/steam', steamRoutes);
 app.use('/api/steam/stats', statsRoutes);
 app.use('/api/lists', listsRoutes);
+app.use('/api/moderation', moderationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

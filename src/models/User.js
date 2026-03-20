@@ -31,11 +31,25 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  // Rol del usuario: usuario normal o administrador
   role: {
     type: String,
     enum: ['user', 'admin'],
     default: 'user',
   },
+  // Estado de moderación: activo, advertido, silenciado o baneado
+  status: {
+    type: String,
+    enum: ['active', 'warned', 'silenced', 'banned'],
+    default: 'active',
+  },
+  // Historial de acciones de moderación aplicadas a este usuario
+  moderationHistory: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ModerationAction',
+    },
+  ],
 });
 
 export default mongoose.model('User', userSchema);
