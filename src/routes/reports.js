@@ -14,7 +14,18 @@ const TARGET_CONFIG = {
   user: { model: User, targetType: 'User' },
 };
 
-const ALLOWED_REASONS = ['Spam', 'Contenido Ofensivo', 'Informacion Falsa', 'Información Falsa', 'Otros'];
+const ALLOWED_REASONS = [
+  // Para listas y comentarios
+  'Spam',
+  'Contenido Ofensivo',
+  'Informacion Falsa',
+  'Información Falsa',
+  'Otros',
+  // Para usuarios
+  'Nombre Ofensivo',
+  'Imagen Inadecuada',
+  'Se hace pasar por otra persona',
+];
 
 router.post('/', verifyToken, async (req, res) => {
   try {
