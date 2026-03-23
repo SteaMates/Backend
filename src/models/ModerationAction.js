@@ -40,6 +40,28 @@ const moderationActionSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  // Indica si la sanción sigue vigente
+  isActive: {
+    type: Boolean,
+    default: true,
+    index: true,
+  },
+  // Fecha en la que se revierte manualmente o expira
+  revokedAt: {
+    type: Date,
+    default: null,
+  },
+  // Admin que revierte manualmente (null si expiró automáticamente)
+  revokedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
+  // Motivo de la reversión
+  revokeReason: {
+    type: String,
+    default: '',
+  },
 });
 
 export default mongoose.model('ModerationAction', moderationActionSchema);

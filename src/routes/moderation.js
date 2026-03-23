@@ -8,6 +8,97 @@ import User from '../models/User.js';
 
 const router = Router();
 
+// Prioridad al calcular el estado final cuando hay varias sanciones activas.
+const MODERATION_STATUS_PRIORITY = ['banned', 'silenced', 'warned'];
+
+// Convierte el tipo de acción de moderación al estado que se refleja en el usuario.
+function mapActionToUserStatus(action) {
+  if (action === 'banned') return 'banned';
+  if (action === 'silenced') return 'silenced';
+  if (action === 'warned') return 'warned';
+  return 'active';
+}
+
+// Recalcula el estado real del usuario en base a sanciones activas y no expiradas.
+async function recalculateUserStatus(userId) {
+  const now = new Date();
+
+  // Cierra sanciones activas que ya expiraron para este usuario.
+  await ModerationAction.updateMany(
+    {
+      userId,
+      isActive: true,
+      expiresAt: { $ne: null, $lte: now },
+    },
+    {
+      $set: {
+        isActive: false,
+        revokedAt: now,
+        revokeReason: 'expired',
+      },
+      $unset: { revokedBy: '' },
+    }
+  );
+
+  const activeActions = await ModerationAction.find({
+    userId,
+    isActive: true,
+    action: { $in: ['warned', 'silenced', 'banned'] },
+    $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+  })
+    .sort({ createdAt: -1 })
+    .select('action createdAt');
+
+  let nextStatus = 'active';
+  // Se aplica la sanción de mayor severidad disponible.
+  for (const status of MODERATION_STATUS_PRIORITY) {
+    if (activeActions.some((item) => item.action === status)) {
+      nextStatus = status;
+      break;
+    }
+  }
+
+  const user = await User.findById(userId);
+  if (user && user.status !== nextStatus) {
+    user.status = nextStatus;
+    await user.save();
+  }
+
+  return nextStatus;
+}
+
+// Expira sanciones temporales vencidas y sincroniza estados de los usuarios afectados.
+async function expireAllModerationActions() {
+  const now = new Date();
+  const expiredActions = await ModerationAction.find({
+    isActive: true,
+    expiresAt: { $ne: null, $lte: now },
+  }).select('userId');
+
+  if (expiredActions.length === 0) return;
+
+  const userIds = [...new Set(expiredActions.map((action) => action.userId.toString()))];
+
+  await ModerationAction.updateMany(
+    {
+      isActive: true,
+      expiresAt: { $ne: null, $lte: now },
+    },
+    {
+      $set: {
+        isActive: false,
+        revokedAt: now,
+        revokeReason: 'expired',
+      },
+      $unset: { revokedBy: '' },
+    }
+  );
+
+  for (const userId of userIds) {
+    await recalculateUserStatus(userId);
+  }
+}
+
 // ========== REPORTS ==========
 
 // POST /api/moderation/reports - Crear un reporte
@@ -118,12 +209,74 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Acción de moderación inválida' });
     }
 
+    // Sincroniza estado antes de decidir si esta petición aplica o revierte.
+    await recalculateUserStatus(userId);
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Toggle: si la sanción ya está activa, el mismo botón la revierte.
+    if (mapActionToUserStatus(action) !== 'active' && user.status === mapActionToUserStatus(action)) {
+      const toggleOffReason = reason?.trim() || `manual_unset_${action}`;
+      await ModerationAction.updateMany(
+        {
+          userId,
+          action,
+          isActive: true,
+        },
+        {
+          $set: {
+            isActive: false,
+            revokedAt: new Date(),
+            revokedBy: req.user._id,
+            revokeReason: toggleOffReason,
+          },
+        }
+      );
+
+      // Recalcula por si había otras sanciones activas (ej: warned + silenced).
+      const newStatus = await recalculateUserStatus(userId);
+
+      await AuditLog.create({
+        adminId: req.user._id,
+        action: 'remove_moderation',
+        targetId: userId,
+        targetType: 'User',
+        changes: { action, reason: toggleOffReason, userStatus: newStatus },
+      });
+
+      return res.status(200).json({
+        success: true,
+        toggledOff: true,
+        userStatus: newStatus,
+      });
+    }
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'El motivo es obligatorio para aplicar la sanción' });
+    }
+
     // Calcular expiración si tiene duración
     let expiresAt = null;
     if (duration && duration > 0) {
       expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + duration);
     }
+
+    // Se cierra la sanción vigente para evitar acciones activas solapadas.
+    await ModerationAction.updateMany(
+      { userId, isActive: true },
+      {
+        $set: {
+          isActive: false,
+          revokedAt: new Date(),
+          revokedBy: req.user._id,
+          revokeReason: 'replaced_by_new_action',
+        },
+      }
+    );
 
     // Crear acción de moderación
     const modAction = new ModerationAction({
@@ -133,17 +286,15 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
       duration,
       appliedBy: req.user._id,
       expiresAt,
+      isActive: true,
     });
 
     await modAction.save();
 
     // Actualizar estado del usuario
-    const user = await User.findById(userId);
-    if (user) {
-      user.status = action === 'warned' ? 'warned' : action === 'silenced' ? 'silenced' : action === 'banned' ? 'banned' : 'active';
-      user.moderationHistory.push(modAction._id);
-      await user.save();
-    }
+    user.status = action === 'warned' ? 'warned' : action === 'silenced' ? 'silenced' : action === 'banned' ? 'banned' : 'active';
+    user.moderationHistory.push(modAction._id);
+    await user.save();
 
     // Registrar en auditoría
     await AuditLog.create({
@@ -164,8 +315,12 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
 // GET /api/moderation/user/:userId - Historial de moderación
 router.get('/user/:userId', verifyToken, requireAdmin, async (req, res) => {
   try {
+    // El historial se devuelve con el estado ya sincronizado tras posibles expiraciones.
+    await recalculateUserStatus(req.params.userId);
+
     const actions = await ModerationAction.find({ userId: req.params.userId })
       .populate('appliedBy', 'username')
+      .populate('revokedBy', 'username')
       .sort({ createdAt: -1 });
 
     res.json({ actions });
@@ -214,6 +369,9 @@ router.get('/audit-log', verifyToken, requireAdmin, async (req, res) => {
 // GET /api/moderation/users - Listar usuarios con estado de moderación (admin only)
 router.get('/users', verifyToken, requireAdmin, async (req, res) => {
   try {
+    // Antes de listar, se procesan vencimientos para que el panel vea datos reales.
+    await expireAllModerationActions();
+
     const { status, page = 1, limit = 20, search } = req.query;
     const filter = {};
 
