@@ -209,6 +209,14 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Acción de moderación inválida' });
     }
 
+    const hasDuration = duration !== undefined && duration !== null && duration !== '';
+    const parsedDuration = hasDuration ? Number(duration) : null;
+    if ((action === 'silenced' || action === 'banned') && hasDuration) {
+      if (!Number.isInteger(parsedDuration) || parsedDuration <= 0) {
+        return res.status(400).json({ error: 'La duración debe ser un número entero mayor que 0' });
+      }
+    }
+
     // Sincroniza estado antes de decidir si esta petición aplica o revierte.
     await recalculateUserStatus(userId);
 
@@ -260,9 +268,9 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
 
     // Calcular expiración si tiene duración
     let expiresAt = null;
-    if (duration && duration > 0) {
+    if (parsedDuration && parsedDuration > 0) {
       expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + duration);
+      expiresAt.setDate(expiresAt.getDate() + parsedDuration);
     }
 
     // Se cierra la sanción vigente para evitar acciones activas solapadas.
@@ -283,7 +291,7 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
       userId,
       action,
       reason,
-      duration,
+      duration: parsedDuration,
       appliedBy: req.user._id,
       expiresAt,
       isActive: true,
