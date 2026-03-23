@@ -13,6 +13,7 @@ import steamRoutes from "./routes/steam.js";
 import statsRoutes from "./routes/stats.js";
 import listsRoutes from "./routes/lists.js";
 import moderationRoutes from "./routes/moderation.js";
+import reportsRoutes from "./routes/reports.js";
 
 // NUEVO
 import sessionsRoutes from "./routes/sessions.js";
@@ -76,6 +77,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/steam", steamRoutes);
 app.use("/api/steam/stats", statsRoutes);
 app.use("/api/lists", listsRoutes);
+app.use("/api/reports", reportsRoutes);
 app.use("/api/moderation", moderationRoutes);
 
 // NUEVO

@@ -20,6 +20,12 @@ const reportSchema = new mongoose.Schema({
     required: true,
   },
   // Usuario que realiza el reporte
+  reporterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  // Compatibilidad con el panel actual de admin
   reportedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -63,5 +69,8 @@ const reportSchema = new mongoose.Schema({
     default: null,
   },
 });
+
+// Un usuario no puede reportar el mismo objetivo mas de una vez.
+reportSchema.index({ reportedBy: 1, targetId: 1, targetType: 1 }, { unique: true });
 
 export default mongoose.model('Report', reportSchema);

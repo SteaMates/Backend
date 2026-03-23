@@ -110,10 +110,21 @@ router.post('/reports', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Campos requeridos: type, targetId, targetType, reason' });
     }
 
+    const existing = await Report.findOne({
+      targetId,
+      targetType,
+      $or: [{ reporterId: req.user._id }, { reportedBy: req.user._id }],
+    }).lean();
+
+    if (existing) {
+      return res.status(409).json({ error: 'Ya reportaste este contenido' });
+    }
+
     const report = new Report({
       type,
       targetId,
       targetType,
+      reporterId: req.user._id,
       reportedBy: req.user._id,
       reason,
       description,
@@ -123,6 +134,9 @@ router.post('/reports', verifyToken, async (req, res) => {
     await report.save();
     res.status(201).json({ success: true, report });
   } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({ error: 'Ya reportaste este contenido' });
+    }
     console.error('Error creando reporte:', error);
     res.status(500).json({ error: error.message });
   }
