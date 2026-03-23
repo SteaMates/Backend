@@ -67,6 +67,10 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'List not found' });
     }
     
+    if (!list.author) {
+      return res.status(404).json({ error: 'List author not found' });
+    }
+    
     res.json(list);
   } catch (error) {
     console.error('Error fetching list details:', error);
