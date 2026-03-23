@@ -40,7 +40,7 @@ router.post('/', verifyToken, async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const lists = await GameList.find()
-      .populate('author', 'username avatar steamId _id')
+      .populate('author', 'username avatar steamId')
       .lean()
       .sort({ createdAt: -1 });
       
@@ -61,14 +61,10 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const list = await GameList.findById(req.params.id)
-      .populate('author', 'username avatar steamId _id');
+      .populate('author', 'username avatar steamId');
     
     if (!list) {
       return res.status(404).json({ error: 'List not found' });
-    }
-    
-    if (!list.author) {
-      return res.status(404).json({ error: 'List author not found' });
     }
     
     res.json(list);
