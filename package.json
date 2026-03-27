@@ -5,8 +5,9 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "swagger": "node swagger.js",
+    "start": "npm run swagger && node src/index.js",
+    "dev": "npm run swagger && node --watch src/index.js"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -21,6 +22,9 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.9.5",
     "passport": "^0.7.0",
-    "passport-steam": "^1.0.18"
+    "passport-steam": "^1.0.18",
+    "swagger-autogen": "^2.23.7",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   }
 }

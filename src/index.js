@@ -19,6 +19,12 @@ import reportsRoutes from "./routes/reports.js";
 import sessionsRoutes from "./routes/sessions.js";
 import notificationsRoutes from "./routes/notifications.js";
 
+// Swagger
+import swaggerUi from "swagger-ui-express";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const swaggerDocument = require("../swagger-output.json");
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -83,6 +89,9 @@ app.use("/api/moderation", moderationRoutes);
 // NUEVO
 app.use("/api/sessions", sessionsRoutes);
 app.use("/api/notifications", notificationsRoutes);
+
+// Swagger Documentation Route
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Health check
 app.get("/api/health", (req, res) => {
