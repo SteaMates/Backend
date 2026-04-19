@@ -14,6 +14,7 @@ import statsRoutes from "./routes/stats.js";
 import listsRoutes from "./routes/lists.js";
 import moderationRoutes from "./routes/moderation.js";
 import reportsRoutes from "./routes/reports.js";
+import marketRoutes from "./routes/market.js";
 
 // NUEVO
 import sessionsRoutes from "./routes/sessions.js";
@@ -85,6 +86,7 @@ app.use("/api/steam/stats", statsRoutes);
 app.use("/api/lists", listsRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/moderation", moderationRoutes);
+app.use("/api/market", marketRoutes);
 
 // NUEVO
 app.use("/api/sessions", sessionsRoutes);

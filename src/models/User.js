@@ -1,5 +1,30 @@
 import mongoose from 'mongoose';
 
+const wishlistItemSchema = new mongoose.Schema(
+  {
+    steamAppId: { type: String, default: '' },
+    gameId: { type: String, default: '' },
+    title: { type: String, required: true, trim: true },
+    thumb: { type: String, default: '' },
+    addedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const priceAlertSchema = new mongoose.Schema(
+  {
+    steamAppId: { type: String, default: '' },
+    gameId: { type: String, default: '' },
+    title: { type: String, required: true, trim: true },
+    thumb: { type: String, default: '' },
+    targetPrice: { type: Number, required: true, min: 0 },
+    enabled: { type: Boolean, default: true },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const userSchema = new mongoose.Schema({
   steamId: {
     type: String,
@@ -50,6 +75,18 @@ const userSchema = new mongoose.Schema({
       ref: 'ModerationAction',
     },
   ],
+
+  // Juegos guardados por el usuario para seguimiento en mercado.
+  wishlist: {
+    type: [wishlistItemSchema],
+    default: [],
+  },
+
+  // Alertas de precio por juego para seguimiento manual.
+  priceAlerts: {
+    type: [priceAlertSchema],
+    default: [],
+  },
 });
 
 export default mongoose.model('User', userSchema);
