@@ -4,6 +4,12 @@ import GameCache from "../models/GameCache.js";
 const router = Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
 
+function getItadApiKey() {
+  const key = process.env.ITAD_API_KEY || process.env.ISTHEREANYDEAL_API_KEY;
+  if (!key || key === "your_itad_api_key_here") return null;
+  return key;
+}
+
 function getSteamApiKey() {
   const key = process.env.STEAM_API_KEY;
   if (!key || key === "your_steam_api_key_here") return null;
@@ -19,6 +25,144 @@ async function fetchOwnedGames(steamId) {
   );
   const data = await response.json();
   return data.response?.games || [];
+}
+
+function firstDefined(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null) return value;
+  }
+  return null;
+}
+
+function toTimestampMs(raw) {
+  if (raw === undefined || raw === null) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return n > 1_000_000_000_000 ? Math.floor(n) : Math.floor(n * 1000);
+}
+
+function toNumericPrice(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  if (typeof raw === "string") {
+    const parsed = Number.parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (typeof raw === "object") {
+    const nested = firstDefined(raw.amount, raw.price, raw.value);
+    return toNumericPrice(nested);
+  }
+  return null;
+}
+
+function extractItadGameId(payload) {
+  if (!payload) return null;
+
+  if (typeof payload === "string") return payload;
+
+  const candidates = [
+    payload.id,
+    payload.gameId,
+    payload.gameID,
+    payload.plain,
+    payload?.game?.id,
+    payload?.game?.plain,
+    payload?.data?.id,
+    payload?.data?.plain,
+    payload?.result?.id,
+    payload?.result?.plain,
+  ].filter(Boolean);
+
+  if (candidates.length) return String(candidates[0]);
+
+  const arrays = [
+    payload.data,
+    payload.results,
+    payload.items,
+    payload.games,
+    payload.found,
+    payload.matches,
+  ].filter(Array.isArray);
+
+  for (const arr of arrays) {
+    if (arr.length === 0) continue;
+    const item = arr[0];
+    const id = firstDefined(item?.id, item?.plain, item?.gameId, item?.gameID);
+    if (id) return String(id);
+  }
+
+  return null;
+}
+
+function normalizeItadHistory(payload) {
+  const possibleArrays = [];
+
+  if (Array.isArray(payload)) possibleArrays.push(payload);
+  if (Array.isArray(payload?.data)) possibleArrays.push(payload.data);
+  if (Array.isArray(payload?.history)) possibleArrays.push(payload.history);
+  if (Array.isArray(payload?.entries)) possibleArrays.push(payload.entries);
+  if (Array.isArray(payload?.items)) possibleArrays.push(payload.items);
+  if (Array.isArray(payload?.prices)) possibleArrays.push(payload.prices);
+  if (Array.isArray(payload?.list)) possibleArrays.push(payload.list);
+  if (Array.isArray(payload?.result?.history)) possibleArrays.push(payload.result.history);
+
+  const points = [];
+
+  for (const arr of possibleArrays) {
+    for (const item of arr) {
+      if (!item || typeof item !== "object") continue;
+
+      const price = toNumericPrice(
+        firstDefined(
+          item.price,
+          item.amount,
+          item.value,
+          item.cut,
+          item?.deal?.price,
+          item?.deal?.price_new,
+          item?.deal?.priceOld,
+          item?.deal?.amount,
+          item?.shop?.price,
+          item?.current,
+        ),
+      );
+
+      const timestampMs = toTimestampMs(
+        firstDefined(
+          item.timestamp,
+          item.time,
+          item.date,
+          item.added,
+          item.lastChange,
+          item.cutAt,
+          item?.deal?.timestamp,
+          item?.deal?.time,
+          item?.deal?.date,
+        ),
+      );
+
+      if (!timestampMs || price === null || price <= 0) continue;
+
+      points.push({
+        timestamp: timestampMs,
+        price,
+      });
+    }
+  }
+
+  const deduped = [];
+  const seen = new Set();
+
+  points
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .forEach((point) => {
+      const key = `${point.timestamp}-${point.price}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      deduped.push(point);
+    });
+
+  return deduped;
 }
 
 // GET /api/steam/profile/:steamId - Get Steam user profile
@@ -164,6 +308,129 @@ router.get("/search", async (req, res) => {
   } catch (error) {
     console.error("Steam search error:", error);
     res.status(500).json({ error: "Error searching games" });
+  }
+});
+
+// GET /api/steam/app/:appId - Get Steam app details from Steam Store API
+router.get("/app/:appId", async (req, res) => {
+  try {
+    const { appId } = req.params;
+    if (!appId || !/^\d+$/.test(appId)) {
+      return res.status(400).json({ error: "Invalid appId" });
+    }
+
+    const response = await fetch(
+      `https://store.steampowered.com/api/appdetails?appids=${appId}&l=spanish`,
+    );
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "Steam app request failed" });
+    }
+
+    const raw = await response.json();
+    const appNode = raw?.[appId];
+
+    if (!appNode?.success || !appNode?.data) {
+      return res.status(404).json({ error: "Steam app not found" });
+    }
+
+    const app = appNode.data;
+
+    return res.json({
+      data: {
+        steam_appid: app.steam_appid,
+        name: app.name,
+        header_image: app.header_image,
+        short_description: app.short_description,
+        is_free: app.is_free,
+        genres: app.genres || [],
+        release_date: app.release_date || null,
+      },
+    });
+  } catch (error) {
+    console.error("Steam app details error:", error);
+    return res.status(500).json({ error: "Error fetching Steam app details" });
+  }
+});
+
+// GET /api/steam/itad/history - Price history from IsThereAnyDeal
+router.get("/itad/history", async (req, res) => {
+  try {
+    const key = getItadApiKey();
+    if (!key) {
+      return res.status(503).json({
+        error: "IsThereAnyDeal API key not configured",
+        hint: "Set ITAD_API_KEY or ISTHEREANYDEAL_API_KEY in backend .env",
+      });
+    }
+
+    const appId = typeof req.query.appId === "string" ? req.query.appId.trim() : "";
+    const title = typeof req.query.title === "string" ? req.query.title.trim() : "";
+    const country = typeof req.query.country === "string" && req.query.country
+      ? req.query.country
+      : "ES";
+
+    if (!appId && !title) {
+      return res.status(400).json({ error: "appId or title query param is required" });
+    }
+
+    let gameId = null;
+
+    if (appId) {
+      const lookupUrl = new URL("https://api.isthereanydeal.com/games/lookup/v1");
+      lookupUrl.searchParams.set("key", key);
+      lookupUrl.searchParams.set("appid", appId);
+      lookupUrl.searchParams.set("shop", "steam");
+
+      const lookupRes = await fetch(lookupUrl);
+      if (lookupRes.ok) {
+        const lookupData = await lookupRes.json();
+        gameId = extractItadGameId(lookupData);
+      }
+    }
+
+    if (!gameId && title) {
+      const searchUrl = new URL("https://api.isthereanydeal.com/games/search/v1");
+      searchUrl.searchParams.set("key", key);
+      searchUrl.searchParams.set("title", title);
+      searchUrl.searchParams.set("results", "1");
+
+      const searchRes = await fetch(searchUrl);
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        gameId = extractItadGameId(searchData);
+      }
+    }
+
+    if (!gameId) {
+      return res.status(404).json({ error: "Game not found in IsThereAnyDeal" });
+    }
+
+    const historyUrl = new URL("https://api.isthereanydeal.com/games/history/v2");
+    historyUrl.searchParams.set("key", key);
+    historyUrl.searchParams.set("id", gameId);
+    historyUrl.searchParams.set("country", country);
+
+    const historyRes = await fetch(historyUrl);
+    if (!historyRes.ok) {
+      const details = await historyRes.text().catch(() => "");
+      return res.status(historyRes.status).json({
+        error: "IsThereAnyDeal history request failed",
+        details,
+      });
+    }
+
+    const historyData = await historyRes.json();
+    const points = normalizeItadHistory(historyData);
+
+    return res.json({
+      gameId,
+      source: "isthereanydeal",
+      points,
+    });
+  } catch (error) {
+    console.error("IsThereAnyDeal history error:", error);
+    return res.status(500).json({ error: "Error fetching IsThereAnyDeal history" });
   }
 });
 

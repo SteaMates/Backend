@@ -170,6 +170,153 @@ async function getSteamContextCached(steamId) {
   return data;
 }
 
+function parseRecommendationResponse(rawText) {
+  if (!rawText || typeof rawText !== 'string') return [];
+
+  const clean = rawText.replace(/```json|```/gi, '').trim();
+  const tryParse = (text) => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  };
+
+  let parsed = tryParse(clean);
+
+  if (!parsed) {
+    const start = clean.indexOf('[');
+    const end = clean.lastIndexOf(']');
+    if (start !== -1 && end !== -1 && end > start) {
+      parsed = tryParse(clean.slice(start, end + 1));
+    }
+  }
+
+  const list = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.recommendations)
+      ? parsed.recommendations
+      : [];
+
+  return list
+    .map((item) => ({
+      title: String(item?.title || item?.name || '').trim(),
+      reason: String(item?.reason || item?.why || '').trim(),
+    }))
+    .filter((item) => item.title.length > 0)
+    .slice(0, 12);
+}
+
+function pickBestCheapSharkDeal(rawDeals) {
+  if (!Array.isArray(rawDeals) || rawDeals.length === 0) return null;
+
+  const valid = rawDeals.filter((deal) => Number.parseFloat(deal?.savings || '0') > 0);
+  if (valid.length === 0) return null;
+
+  return valid.sort(
+    (a, b) => Number.parseFloat(b?.savings || '0') - Number.parseFloat(a?.savings || '0')
+  )[0];
+}
+
+// POST /api/chat/market-recommendations - Personalized recommendations (Groq + CheapShark)
+router.post('/market-recommendations', async (req, res) => {
+  try {
+    const { steamId, limit } = req.body || {};
+
+    if (!steamId || typeof steamId !== 'string') {
+      return res.status(400).json({ error: 'steamId is required' });
+    }
+
+    const maxItems = Math.min(Math.max(Number(limit) || 6, 1), 12);
+
+    const groq = getGroqClient();
+    if (!groq) {
+      return res.status(503).json({
+        error: 'Groq API key not configured',
+        hint: 'Add GROQ_API_KEY to server/.env — get one at https://console.groq.com/keys'
+      });
+    }
+
+    const steamData = await getSteamContextCached(steamId);
+    const topGames = (steamData?.topGames || [])
+      .map((g) => g?.name)
+      .filter(Boolean)
+      .slice(0, 20);
+
+    if (topGames.length === 0) {
+      return res.json({ deals: [] });
+    }
+
+    const lowerOwned = new Set(topGames.map((name) => name.toLowerCase()));
+
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.35,
+      max_tokens: 700,
+      top_p: 0.9,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Eres un recomendador de juegos de Steam. Devuelve SIEMPRE JSON válido, sin markdown, sin texto extra. Formato exacto: [{"title":"string","reason":"string"}]',
+        },
+        {
+          role: 'user',
+          content:
+            `Estos son los juegos más jugados del usuario: ${topGames.join(', ')}. ` +
+            'Recomienda 10 juegos de PC en Steam que encajen con sus gustos y NO estén ya en su biblioteca. ' +
+            'Cada elemento debe incluir title y reason (máximo 1 frase).',
+        },
+      ],
+    });
+
+    const rawContent = completion.choices[0]?.message?.content || '[]';
+    const recommendations = parseRecommendationResponse(rawContent)
+      .filter((rec) => !lowerOwned.has(rec.title.toLowerCase()))
+      .slice(0, 10);
+
+    if (recommendations.length === 0) {
+      return res.json({ deals: [] });
+    }
+
+    const foundDeals = [];
+    const seen = new Set();
+
+    for (const rec of recommendations) {
+      const url = new URL('https://www.cheapshark.com/api/1.0/deals');
+      url.searchParams.set('title', rec.title);
+      url.searchParams.set('storeID', '1');
+      url.searchParams.set('pageSize', '8');
+      url.searchParams.set('sortBy', 'Savings');
+      url.searchParams.set('desc', '1');
+
+      try {
+        const dealResponse = await fetch(url);
+        if (!dealResponse.ok) continue;
+
+        const dealList = await dealResponse.json();
+        const best = pickBestCheapSharkDeal(dealList);
+        if (!best) continue;
+
+        const uniqueKey = best.steamAppID || best.gameID || best.dealID || rec.title.toLowerCase();
+        if (seen.has(uniqueKey)) continue;
+
+        seen.add(uniqueKey);
+        foundDeals.push({ ...best, reason: rec.reason });
+
+        if (foundDeals.length >= maxItems) break;
+      } catch {
+        // Ignore individual title failures and keep trying others.
+      }
+    }
+
+    return res.json({ deals: foundDeals });
+  } catch (error) {
+    console.error('Market recommendations error:', error);
+    return res.status(500).json({ error: 'Error generating market recommendations' });
+  }
+});
+
 // POST /api/chat/message - Send a message and get AI response (with optional screen context)
 router.post('/message', async (req, res) => {
   try {
