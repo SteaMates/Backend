@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "crypto";
 import { verifyToken } from "../middleware/auth.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
@@ -29,12 +30,43 @@ function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function createTrackingId() {
+  return typeof randomUUID === "function"
+    ? randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function ensureTrackingIds(userDoc) {
+  let changed = false;
+
+  (userDoc?.wishlist || []).forEach((item) => {
+    if (!normalizeText(item?.id)) {
+      item.id = createTrackingId();
+      changed = true;
+    }
+  });
+
+  (userDoc?.priceAlerts || []).forEach((item) => {
+    if (!normalizeText(item?.id)) {
+      item.id = createTrackingId();
+      changed = true;
+    }
+  });
+
+  return changed;
+}
+
 function getIdentityMatches(item, id) {
-  return item?.steamAppId === id || item?.gameId === id;
+  return item?.id === id || item?.steamAppId === id || item?.gameId === id;
 }
 
 function findDealIdentity(item) {
-  return normalizeText(item?.steamAppId) || normalizeText(item?.gameId) || normalizeText(item?.title).toLowerCase();
+  return (
+    normalizeText(item?.id)
+    || normalizeText(item?.steamAppId)
+    || normalizeText(item?.gameId)
+    || normalizeText(item?.title).toLowerCase()
+  );
 }
 
 function isAlertTriggered(alert, currentPrice) {
@@ -167,16 +199,23 @@ async function maybeNotifyTriggeredAlert(userDoc, alertIndex) {
 // GET /api/market/wishlist
 router.get("/wishlist", verifyToken, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).lean();
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
+    const hasBackfilledIds = ensureTrackingIds(user);
+
     const wishlist = [...(user.wishlist || [])]
+      .map((item) => (typeof item?.toObject === "function" ? item.toObject() : item))
       .sort((a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime());
 
     const withLive = String(req.query.live ?? "true") !== "false";
     if (!withLive || wishlist.length === 0) {
+      if (hasBackfilledIds) {
+        user.markModified("wishlist");
+        await user.save();
+      }
       return res.json({ wishlist });
     }
 
@@ -192,6 +231,10 @@ router.get("/wishlist", verifyToken, async (req, res) => {
     );
 
     const liveDataMap = new Map(liveEntries);
+    if (hasBackfilledIds) {
+      user.markModified("wishlist");
+      await user.save();
+    }
     return res.json({ wishlist: enrichWithLiveData(wishlist, liveDataMap) });
   } catch (error) {
     console.error("Wishlist list error:", error);
@@ -230,6 +273,7 @@ router.post("/wishlist", verifyToken, async (req, res) => {
     }
 
     const wishlistItem = {
+      id: createTrackingId(),
       steamAppId,
       gameId,
       title,
@@ -260,11 +304,14 @@ router.delete("/wishlist/:id", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    const hasBackfilledIds = ensureTrackingIds(user);
+
     const before = (user.wishlist || []).length;
     user.wishlist = (user.wishlist || []).filter((item) => !getIdentityMatches(item, id));
     const removed = before - user.wishlist.length;
 
-    if (removed > 0) {
+    if (removed > 0 || hasBackfilledIds) {
+      user.markModified("wishlist");
       await user.save();
     }
 
@@ -283,11 +330,18 @@ router.get("/alerts", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    const hasBackfilledIds = ensureTrackingIds(user);
+
     const alerts = [...(user.priceAlerts || [])]
+      .map((item) => (typeof item?.toObject === "function" ? item.toObject() : item))
       .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
 
     const withLive = String(req.query.live ?? "true") !== "false";
     if (!withLive || alerts.length === 0) {
+      if (hasBackfilledIds) {
+        user.markModified("priceAlerts");
+        await user.save();
+      }
       return res.json({ alerts });
     }
 
@@ -352,7 +406,7 @@ router.get("/alerts", verifyToken, async (req, res) => {
       await Notification.insertMany(notificationsToCreate);
     }
 
-    if (hasStateChanges) {
+    if (hasStateChanges || hasBackfilledIds) {
       user.markModified("priceAlerts");
       await user.save();
     }
@@ -413,6 +467,7 @@ router.post("/alerts", verifyToken, async (req, res) => {
     }
 
     const alert = {
+      id: createTrackingId(),
       steamAppId,
       gameId,
       title,
@@ -448,6 +503,8 @@ router.patch("/alerts/:id", verifyToken, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+
+    ensureTrackingIds(user);
 
     const index = (user.priceAlerts || []).findIndex((item) => getIdentityMatches(item, id));
     if (index < 0) {
@@ -498,11 +555,14 @@ router.delete("/alerts/:id", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    const hasBackfilledIds = ensureTrackingIds(user);
+
     const before = (user.priceAlerts || []).length;
     user.priceAlerts = (user.priceAlerts || []).filter((item) => !getIdentityMatches(item, id));
     const removed = before - user.priceAlerts.length;
 
-    if (removed > 0) {
+    if (removed > 0 || hasBackfilledIds) {
+      user.markModified("priceAlerts");
       await user.save();
     }
 

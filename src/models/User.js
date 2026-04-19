@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const wishlistItemSchema = new mongoose.Schema(
   {
+    id: { type: String, default: '' },
     steamAppId: { type: String, default: '' },
     gameId: { type: String, default: '' },
     title: { type: String, required: true, trim: true },
@@ -13,6 +14,7 @@ const wishlistItemSchema = new mongoose.Schema(
 
 const priceAlertSchema = new mongoose.Schema(
   {
+    id: { type: String, default: '' },
     steamAppId: { type: String, default: '' },
     gameId: { type: String, default: '' },
     title: { type: String, required: true, trim: true },
