@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { verifyToken } from "../middleware/auth.js";
 import User from "../models/User.js";
+import Notification from "../models/Notification.js";
 
 const router = Router();
 
@@ -8,6 +9,12 @@ const CHEAPSHARK_BASE_URL = "https://www.cheapshark.com/api/1.0";
 const CHEAPSHARK_HEADERS = {
   "User-Agent": "SteaMates-Backend/1.0 (+https://steamates-frontend.vercel.app)",
 };
+const NOTIFICATION_TTL_DAYS = Number(process.env.NOTIFICATIONS_TTL_DAYS || 30);
+
+function expiresAtFromNow(days = NOTIFICATION_TTL_DAYS) {
+  const ms = Math.max(1, days) * 24 * 60 * 60 * 1000;
+  return new Date(Date.now() + ms);
+}
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -18,12 +25,42 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function formatUsd(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
 function getIdentityMatches(item, id) {
   return item?.steamAppId === id || item?.gameId === id;
 }
 
 function findDealIdentity(item) {
   return normalizeText(item?.steamAppId) || normalizeText(item?.gameId) || normalizeText(item?.title).toLowerCase();
+}
+
+function isAlertTriggered(alert, currentPrice) {
+  const targetPrice = toNumber(alert?.targetPrice);
+  return Boolean(alert?.enabled && currentPrice !== null && targetPrice !== null && currentPrice <= targetPrice);
+}
+
+function buildPriceAlertNotification({ recipientId, alert, currentPrice, targetPrice }) {
+  return {
+    recipient: recipientId,
+    from: null,
+    type: "price_alert_triggered",
+    title: "Objetivo de precio alcanzado",
+    message: `${alert.title} bajó a ${formatUsd(currentPrice)} y alcanzó tu objetivo de ${formatUsd(targetPrice)}.`,
+    session: null,
+    data: {
+      steamAppId: alert?.steamAppId || "",
+      gameId: alert?.gameId || "",
+      title: alert?.title || "Juego",
+      thumb: alert?.thumb || "",
+      currentPrice,
+      targetPrice,
+    },
+    readAt: null,
+    expiresAt: expiresAtFromNow(),
+  };
 }
 
 function mapDeal(deal) {
@@ -84,6 +121,47 @@ function enrichWithLiveData(items, liveDataMap) {
       hasDiscount: savings !== null ? savings > 0 : false,
     };
   });
+}
+
+async function maybeNotifyTriggeredAlert(userDoc, alertIndex) {
+  const alert = userDoc?.priceAlerts?.[alertIndex];
+  if (!alert || !alert.enabled) return false;
+
+  let liveDeal = null;
+  try {
+    liveDeal = await fetchCurrentDealForItem(alert);
+  } catch {
+    liveDeal = null;
+  }
+
+  const currentPrice = toNumber(liveDeal?.salePrice);
+  const targetPrice = toNumber(alert?.targetPrice);
+  const triggered = isAlertTriggered(alert, currentPrice);
+
+  if (triggered && !alert.notifiedAt && currentPrice !== null && targetPrice !== null) {
+    const now = new Date();
+    await Notification.create(
+      buildPriceAlertNotification({
+        recipientId: userDoc._id,
+        alert,
+        currentPrice,
+        targetPrice,
+      }),
+    );
+    alert.notifiedAt = now;
+    alert.lastTriggeredAt = now;
+    userDoc.markModified("priceAlerts");
+    await userDoc.save();
+    return true;
+  }
+
+  if (!triggered && alert.notifiedAt) {
+    alert.notifiedAt = null;
+    userDoc.markModified("priceAlerts");
+    await userDoc.save();
+  }
+
+  return false;
 }
 
 // GET /api/market/wishlist
@@ -200,7 +278,7 @@ router.delete("/wishlist/:id", verifyToken, async (req, res) => {
 // GET /api/market/alerts
 router.get("/alerts", verifyToken, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).lean();
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -225,10 +303,43 @@ router.get("/alerts", verifyToken, async (req, res) => {
     );
 
     const liveDataMap = new Map(liveEntries);
+    const notificationsToCreate = [];
+    let hasStateChanges = false;
+    const now = new Date();
+
+    const alertIndexByIdentity = new Map(
+      (user.priceAlerts || []).map((alert, index) => [findDealIdentity(alert), index]),
+    );
+
     const enrichedAlerts = enrichWithLiveData(alerts, liveDataMap).map((alert) => {
       const currentPrice = alert.currentPrice;
       const targetPrice = toNumber(alert.targetPrice);
-      const triggered = Boolean(alert.enabled && currentPrice !== null && targetPrice !== null && currentPrice <= targetPrice);
+      const triggered = isAlertTriggered(alert, currentPrice);
+
+      const identity = findDealIdentity(alert);
+      const storedIndex = alertIndexByIdentity.get(identity);
+      const storedAlert = storedIndex !== undefined ? user.priceAlerts?.[storedIndex] : null;
+
+      if (storedAlert) {
+        if (triggered && !storedAlert.notifiedAt && currentPrice !== null && targetPrice !== null) {
+          storedAlert.notifiedAt = now;
+          storedAlert.lastTriggeredAt = now;
+          hasStateChanges = true;
+          notificationsToCreate.push(
+            buildPriceAlertNotification({
+              recipientId: user._id,
+              alert: storedAlert,
+              currentPrice,
+              targetPrice,
+            }),
+          );
+        }
+
+        if (!triggered && storedAlert.notifiedAt) {
+          storedAlert.notifiedAt = null;
+          hasStateChanges = true;
+        }
+      }
 
       return {
         ...alert,
@@ -236,6 +347,15 @@ router.get("/alerts", verifyToken, async (req, res) => {
         triggered,
       };
     });
+
+    if (notificationsToCreate.length > 0) {
+      await Notification.insertMany(notificationsToCreate);
+    }
+
+    if (hasStateChanges) {
+      user.markModified("priceAlerts");
+      await user.save();
+    }
 
     return res.json({ alerts: enrichedAlerts });
   } catch (error) {
@@ -278,12 +398,17 @@ router.post("/alerts", verifyToken, async (req, res) => {
       user.priceAlerts[existingIndex].enabled = true;
       user.priceAlerts[existingIndex].thumb = thumb || user.priceAlerts[existingIndex].thumb || "";
       user.priceAlerts[existingIndex].title = title || user.priceAlerts[existingIndex].title;
+      user.priceAlerts[existingIndex].notifiedAt = null;
+      user.priceAlerts[existingIndex].lastTriggeredAt = null;
       user.priceAlerts[existingIndex].updatedAt = new Date();
       await user.save();
+
+      const triggeredNow = await maybeNotifyTriggeredAlert(user, existingIndex);
 
       return res.json({
         alert: user.priceAlerts[existingIndex],
         existed: true,
+        triggeredNow,
       });
     }
 
@@ -294,6 +419,8 @@ router.post("/alerts", verifyToken, async (req, res) => {
       thumb,
       targetPrice,
       enabled: true,
+      notifiedAt: null,
+      lastTriggeredAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -301,7 +428,9 @@ router.post("/alerts", verifyToken, async (req, res) => {
     user.priceAlerts = [alert, ...(user.priceAlerts || [])].slice(0, 300);
     await user.save();
 
-    return res.status(201).json({ alert, existed: false });
+    const triggeredNow = await maybeNotifyTriggeredAlert(user, 0);
+
+    return res.status(201).json({ alert: user.priceAlerts[0], existed: false, triggeredNow });
   } catch (error) {
     console.error("Price alert create error:", error);
     return res.status(500).json({ error: "Error creating price alert" });
@@ -331,16 +460,25 @@ router.patch("/alerts/:id", verifyToken, async (req, res) => {
         return res.status(400).json({ error: "targetPrice must be greater than 0" });
       }
       user.priceAlerts[index].targetPrice = target;
+      user.priceAlerts[index].notifiedAt = null;
+      user.priceAlerts[index].lastTriggeredAt = null;
     }
 
     if (nextEnabled !== undefined) {
       user.priceAlerts[index].enabled = Boolean(nextEnabled);
+      if (!user.priceAlerts[index].enabled) {
+        user.priceAlerts[index].notifiedAt = null;
+      }
     }
 
     user.priceAlerts[index].updatedAt = new Date();
     await user.save();
 
-    return res.json({ alert: user.priceAlerts[index] });
+    const triggeredNow = user.priceAlerts[index].enabled
+      ? await maybeNotifyTriggeredAlert(user, index)
+      : false;
+
+    return res.json({ alert: user.priceAlerts[index], triggeredNow });
   } catch (error) {
     console.error("Price alert update error:", error);
     return res.status(500).json({ error: "Error updating price alert" });

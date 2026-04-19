@@ -32,6 +32,7 @@ const notificationSchema = new mongoose.Schema(
         "session_response",
         "session_cancelled",
         "session_updated",
+        "price_alert_triggered",
       ],
       required: true,
       index: true,

@@ -19,6 +19,8 @@ const priceAlertSchema = new mongoose.Schema(
     thumb: { type: String, default: '' },
     targetPrice: { type: Number, required: true, min: 0 },
     enabled: { type: Boolean, default: true },
+    notifiedAt: { type: Date, default: null },
+    lastTriggeredAt: { type: Date, default: null },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
