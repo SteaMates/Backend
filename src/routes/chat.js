@@ -24,7 +24,7 @@ Reglas:
 - Usa negritas para nombres de juegos
 - Incluye precios aproximados cuando sea relevante
 - Sé honesto cuando no tengas información suficiente
-- Prioriza siempre la personalización de la respuesta usando biblioteca, amigos y contexto antes que respuestas genéricas
+- Prioriza la personalización de la respuesta usando biblioteca, amigos y contexto antes que respuestas genéricas
 - Mantén un tono casual y gamer
 - Usa los datos de la biblioteca y amigos del usuario para personalizar tus respuestas
 - Cuando recomiendes juegos, ten en cuenta lo que ya tiene y lo que juega más
@@ -42,7 +42,9 @@ function getGroqClient() {
   if (!apiKey || apiKey === 'your_groq_api_key_here') {
     return null;
   }
-  return new Groq({ apiKey });
+  // Soporte automático para OpenRouter si la key empieza por sk-or-
+  const baseURL = apiKey.startsWith('sk-or-') ? 'https://openrouter.ai/api/v1' : undefined;
+  return new Groq({ apiKey, baseURL });
 }
 
 function getSteamApiKey() {
@@ -379,15 +381,11 @@ router.post('/message', async (req, res) => {
     let groqMessages;
 
     if (hasVision) {
-      // Vision model: use image_url format for the current message
+      // Vision models on some APIs (like Groq or certain OpenRouter endpoints) 
+      // often reject multi-turn history when images are included, 
+      // or require strictly format compliance. We send only the system prompt + image message.
       groqMessages = [
         { role: 'system', content: fullSystemPrompt },
-        // Add previous messages (text only)
-        ...recentMessages.slice(0, -1).map(m => ({
-          role: m.role === 'system' ? 'assistant' : m.role,
-          content: m.content,
-        })),
-        // Add current message with image
         {
           role: 'user',
           content: [
