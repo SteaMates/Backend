@@ -239,8 +239,16 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
+    const now = new Date();
+    const hasActiveSameAction = await ModerationAction.exists({
+      userId,
+      action,
+      isActive: true,
+      $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+    });
+
     // Toggle: si la sanción ya está activa, el mismo botón la revierte.
-    if (mapActionToUserStatus(action) !== 'active' && user.status === mapActionToUserStatus(action)) {
+    if (mapActionToUserStatus(action) !== 'active' && hasActiveSameAction) {
       const toggleOffReason = reason?.trim() || `manual_unset_${action}`;
       await ModerationAction.updateMany(
         {
@@ -287,9 +295,9 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
       expiresAt.setDate(expiresAt.getDate() + parsedDuration);
     }
 
-    // Se cierra la sanción vigente para evitar acciones activas solapadas.
+    // Solo se reemplaza la misma acción activa, manteniendo otras sanciones compatibles.
     await ModerationAction.updateMany(
-      { userId, isActive: true },
+      { userId, action, isActive: true },
       {
         $set: {
           isActive: false,
@@ -304,10 +312,10 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
     const modAction = new ModerationAction({
       userId,
       action,
-      reason,
-      duration: parsedDuration,
       appliedBy: req.user._id,
       expiresAt,
+
+      const newStatus = await recalculateUserStatus(userId);
       isActive: true,
     });
 
@@ -315,10 +323,10 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
 
     // Actualizar estado del usuario
     user.status = action === 'warned' ? 'warned' : action === 'silenced' ? 'silenced' : action === 'banned' ? 'banned' : 'active';
-    user.moderationHistory.push(modAction._id);
+        changes: { action, reason, duration, userStatus: newStatus },
     await user.save();
 
-    // Registrar en auditoría
+      res.status(201).json({ success: true, modAction, userStatus: newStatus });
     await AuditLog.create({
       adminId: req.user._id,
       action: 'apply_moderation',
