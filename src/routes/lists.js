@@ -3,11 +3,12 @@ import GameList from '../models/GameList.js';
 import User from '../models/User.js';
 import Comment from '../models/Comment.js';
 import { verifyToken } from '../middleware/auth.js';
+import { requireCanPublish } from '../middleware/moderationStatus.js';
 
 const router = express.Router();
 
 // POST /api/lists - Create a new game list
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', verifyToken, requireCanPublish, async (req, res) => {
   try {
     const { title, description, categories, coverImage, games } = req.body;
     
@@ -117,7 +118,7 @@ router.get('/:id/comments', async (req, res) => {
 });
 
 // POST /api/lists/:id/comments
-router.post('/:id/comments', verifyToken, async (req, res) => {
+router.post('/:id/comments', verifyToken, requireCanPublish, async (req, res) => {
   try {
     const { content } = req.body;
     if (!content) return res.status(400).json({ error: 'Content is required' });
