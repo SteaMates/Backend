@@ -42,7 +42,9 @@ function getGroqClient() {
   if (!apiKey || apiKey === 'your_groq_api_key_here') {
     return null;
   }
-  return new Groq({ apiKey });
+  // Soporte automático para OpenRouter si la key empieza por sk-or-
+  const baseURL = apiKey.startsWith('sk-or-') ? 'https://openrouter.ai/api/v1' : undefined;
+  return new Groq({ apiKey, baseURL });
 }
 
 function getSteamApiKey() {
@@ -379,15 +381,11 @@ router.post('/message', async (req, res) => {
     let groqMessages;
 
     if (hasVision) {
-      // Vision model: use image_url format for the current message
+      // Vision models on some APIs (like Groq or certain OpenRouter endpoints) 
+      // often reject multi-turn history when images are included, 
+      // or require strictly format compliance. We send only the system prompt + image message.
       groqMessages = [
         { role: 'system', content: fullSystemPrompt },
-        // Add previous messages (text only)
-        ...recentMessages.slice(0, -1).map(m => ({
-          role: m.role === 'system' ? 'assistant' : m.role,
-          content: m.content,
-        })),
-        // Add current message with image
         {
           role: 'user',
           content: [
