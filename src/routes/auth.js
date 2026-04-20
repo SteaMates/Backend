@@ -22,6 +22,39 @@ async function getActiveWarningReason(userId) {
   return activeWarning?.reason || '';
 }
 
+async function getActiveModerationNotices(userId) {
+  const now = new Date();
+
+  const activeActions = await ModerationAction.find({
+    userId,
+    action: { $in: ['warned', 'silenced'] },
+    isActive: true,
+    $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+  })
+    .sort({ createdAt: 1 })
+    .select('action reason createdAt');
+
+  return activeActions.map((action) => ({
+    action: action.action,
+    reason: action.reason || '',
+    createdAt: action.createdAt,
+  }));
+}
+
+async function getActiveBanReason(userId) {
+  const now = new Date();
+  const activeBan = await ModerationAction.findOne({
+    userId,
+    action: 'banned',
+    isActive: true,
+    $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+  })
+    .sort({ createdAt: -1 })
+    .select('reason');
+
+  return activeBan?.reason || '';
+}
+
 // GET /api/auth/steam - Redirect to Steam login
 router.get('/steam', passport.authenticate('steam', { failureRedirect: clientUrl + '/login' }));
 
@@ -31,6 +64,17 @@ router.get('/steam/callback',
   async (req, res) => {
     try {
       const user = req.user;
+
+      if (user.status === 'banned') {
+        const banReason = await getActiveBanReason(user._id);
+        const bannedParams = new URLSearchParams({
+          error: 'user_banned',
+          reason: banReason,
+        });
+        return res.redirect(`${clientUrl}/login?${bannedParams.toString()}`);
+      }
+
+      const notices = await getActiveModerationNotices(user._id);
       const warningReason = user.status === 'warned' ? await getActiveWarningReason(user._id) : '';
       
       // Generate JWT Token
@@ -48,6 +92,7 @@ router.get('/steam/callback',
         isAdmin: String(user.role === 'admin'),
         status: user.status || 'active',
         warningReason,
+        notices: JSON.stringify(notices),
       });
       res.redirect(`${clientUrl}/login?${params.toString()}`);
     } catch (error) {
@@ -60,7 +105,17 @@ router.get('/steam/callback',
 // GET /api/auth/me - Get current user session via JWT Token
 router.get('/me', verifyToken, (req, res) => {
   const buildResponse = async () => {
+    if (req.user.status === 'banned') {
+      const banReason = await getActiveBanReason(req.user._id);
+      return res.status(403).json({
+        error: 'Tu cuenta está baneada y no puede iniciar sesión.',
+        code: 'USER_BANNED',
+        reason: banReason,
+      });
+    }
+
     const warningReason = req.user.status === 'warned' ? await getActiveWarningReason(req.user._id) : '';
+    const notices = await getActiveModerationNotices(req.user._id);
 
     return res.json({
       authenticated: true,
@@ -74,6 +129,7 @@ router.get('/me', verifyToken, (req, res) => {
         isAdmin: req.user.role === 'admin',
         status: req.user.status || 'active',
         warningReason,
+        notices,
       },
     });
   };
