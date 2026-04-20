@@ -312,30 +312,29 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
     const modAction = new ModerationAction({
       userId,
       action,
+      reason,
+      duration: parsedDuration,
       appliedBy: req.user._id,
       expiresAt,
-
-      const newStatus = await recalculateUserStatus(userId);
       isActive: true,
     });
 
     await modAction.save();
 
-    // Actualizar estado del usuario
-    user.status = action === 'warned' ? 'warned' : action === 'silenced' ? 'silenced' : action === 'banned' ? 'banned' : 'active';
-        changes: { action, reason, duration, userStatus: newStatus },
+    // Guarda histórico y recalcula estado final por prioridad.
+    user.moderationHistory.push(modAction._id);
     await user.save();
+    const newStatus = await recalculateUserStatus(userId);
 
-      res.status(201).json({ success: true, modAction, userStatus: newStatus });
     await AuditLog.create({
       adminId: req.user._id,
       action: 'apply_moderation',
       targetId: userId,
       targetType: 'User',
-      changes: { action, reason, duration },
+      changes: { action, reason, duration, userStatus: newStatus },
     });
 
-    res.status(201).json({ success: true, modAction });
+    res.status(201).json({ success: true, modAction, userStatus: newStatus });
   } catch (error) {
     console.error('Error aplicando sanción:', error);
     res.status(500).json({ error: error.message });
