@@ -64,4 +64,7 @@ const moderationActionSchema = new mongoose.Schema({
   },
 });
 
+// Acelera búsquedas de sanciones activas por usuario y tipo en sesión/auth.
+moderationActionSchema.index({ userId: 1, action: 1, isActive: 1, createdAt: -1, expiresAt: 1 });
+
 export default mongoose.model('ModerationAction', moderationActionSchema);
