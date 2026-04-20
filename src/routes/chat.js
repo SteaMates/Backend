@@ -370,8 +370,11 @@ router.post('/message', async (req, res) => {
 
     // Determine which model to use based on whether we have an image
     const hasVision = !!image;
-    // Using llama-3.2-11b-vision-preview for vision and llama-3.3-70b-versatile for text
-    const model = hasVision ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
+    
+    // Cambiado al modelo solicitado meta-llama/llama-4-scout-17b-16e-instruct para imágenes
+    // OJO: asegurate de que estés en un endpoint compatible con la ruta o que Groq suporte esta cadena,
+    // de lo contrario este modelo podría estar en ruta diferente.
+    const model = hasVision ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'llama-3.3-70b-versatile';
 
     let groqMessages;
 
