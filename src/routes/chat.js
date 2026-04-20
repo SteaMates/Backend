@@ -320,9 +320,7 @@ router.post('/market-recommendations', async (req, res) => {
 // POST /api/chat/message - Send a message and get AI response (with optional screen context)
 router.post('/message', async (req, res) => {
   try {
-    const { message, sessionId, userId, steamId, screenContext, includeSteamContext } = req.body;
-    // FUTURO: Descomentar cuando tengamos modelo de visión
-    // const { message, sessionId, userId, steamId, image } = req.body;
+    const { message, sessionId, userId, steamId, screenContext, includeSteamContext, image } = req.body;
 
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
@@ -358,8 +356,7 @@ router.post('/message', async (req, res) => {
     session.messages.push({
       role: 'user',
       content: userMessageContent,
-      // FUTURO: Descomentar cuando tengamos modelo de visión
-      // hasImage: !!image
+      hasImage: !!image
     });
 
     // Fetch Steam context ONLY if includeSteamContext is true (default true for backwards compatibility)
@@ -371,11 +368,10 @@ router.post('/message', async (req, res) => {
     // Build messages for Groq (include recent history for context, max 20 messages)
     const recentMessages = session.messages.slice(-20);
 
-    // FUTURO: Cuando tengamos modelo de visión, descomentar este código
-    /*
     // Determine which model to use based on whether we have an image
     const hasVision = !!image;
-    const model = hasVision ? 'llama-3.2-90b-vision-preview' : 'llama-3.3-70b-versatile';
+    // Using llama-3.2-11b-vision-preview for vision and llama-3.3-70b-versatile for text
+    const model = hasVision ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
 
     let groqMessages;
 
@@ -392,7 +388,7 @@ router.post('/message', async (req, res) => {
         {
           role: 'user',
           content: [
-            { type: 'text', text: message },
+            { type: 'text', text: userMessageContent },
             {
               type: 'image_url',
               image_url: { url: image } // base64 data URL
@@ -410,17 +406,6 @@ router.post('/message', async (req, res) => {
         })),
       ];
     }
-    */
-
-    // Current implementation: Text-only model
-    const model = 'llama-3.3-70b-versatile';
-    const groqMessages = [
-      { role: 'system', content: fullSystemPrompt },
-      ...recentMessages.map(m => ({
-        role: m.role === 'system' ? 'assistant' : m.role,
-        content: m.content,
-      })),
-    ];
 
     // Call Groq API
     const completion = await groq.chat.completions.create({
