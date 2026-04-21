@@ -1,4 +1,5 @@
 import { Router } from "express";
+import * as cheerio from "cheerio";
 import GameCache from "../models/GameCache.js";
 
 const router = Router();
@@ -343,7 +344,7 @@ router.get("/free-games", async (req, res) => {
     const start    = page * 40;
 
     const url = new URL("https://store.steampowered.com/search/results/");
-    url.searchParams.set("json",       "1");
+    url.searchParams.set("infinite",   "1");
     url.searchParams.set("maxprice",   "free");
     url.searchParams.set("count",      "40");
     url.searchParams.set("start",      start.toString());
@@ -353,22 +354,28 @@ router.get("/free-games", async (req, res) => {
     const response = await fetch(url.toString());
     const data     = await response.json();
 
-    const NON_GAME = new Set(["dlc", "music", "video", "hardware", "bundle"]);
+    const games = [];
+    if (data.results_html) {
+      const $ = cheerio.load(data.results_html);
+      $("a.search_result_row").each((i, el) => {
+        const elem = $(el);
+        const appId = elem.attr("data-ds-appid") || "";
+        if (!appId || appId.includes(",")) return; // skip bundles/empty
 
-    const games = (data.items ?? [])
-      .filter((item) => !NON_GAME.has(item.type))
-      .map((item) => {
-        const appId = item.appid?.toString() ?? "";
-        return {
+        const name = elem.find(".title").text().trim();
+        const tinyImage = elem.find(".search_capsule img").attr("src") 
+          || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
+        
+        games.push({
           appId,
-          name: item.name,
-          type: item.type ?? "game",
+          name,
+          type: "game",
           isFree: true,
-          price: 0,
-          tinyImage: item.logo
-            ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
-        };
+          price: "Gratis",
+          tinyImage
+        });
       });
+    }
 
     res.json({
       games,
@@ -397,7 +404,7 @@ router.get("/by-tags", async (req, res) => {
     const start  = page * 40;
 
     const url = new URL("https://store.steampowered.com/search/results/");
-    url.searchParams.set("json",    "1");
+    url.searchParams.set("infinite", "1");
     url.searchParams.set("count",   "40");
     url.searchParams.set("start",   start.toString());
     url.searchParams.set("sort_by", sort);
@@ -413,28 +420,45 @@ router.get("/by-tags", async (req, res) => {
     const response = await fetch(url.toString());
     const data     = await response.json();
 
-    const NON_GAME = new Set(["dlc", "music", "video", "hardware", "bundle"]);
+    const games = [];
+    if (data.results_html) {
+      const $ = cheerio.load(data.results_html);
+      $("a.search_result_row").each((i, el) => {
+        const elem = $(el);
+        const appId = elem.attr("data-ds-appid") || "";
+        if (!appId || appId.includes(",")) return;
 
-    const games = (data.items ?? [])
-      .filter((item) => !NON_GAME.has(item.type))
-      .map((item) => {
-        const appId = item.appid?.toString() ?? "";
-        // price comes as string e.g. "59,99€" — parse cents if available
-        const priceRaw = item.price ?? item.final_price ?? null;
-        const priceCents = typeof priceRaw === "number" ? priceRaw : null;
-        const priceDollars = priceCents !== null ? parseFloat((priceCents / 100).toFixed(2)) : null;
-        const isFree = priceCents === 0 || !!item.is_free;
+        const name = elem.find(".title").text().trim();
+        const tinyImage = elem.find(".search_capsule img").attr("src") 
+          || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
         
-        return {
+        let priceRaw = elem.find(".discount_final_price").text().trim();
+        if (!priceRaw) priceRaw = elem.find(".search_price").text().trim();
+        
+        let priceDollars = null;
+        let isFreeGame = isFree; // If the query was for isFree, they are all free
+
+        if (priceRaw.toLowerCase().includes("free") || priceRaw.toLowerCase().includes("gratis") || priceRaw === "Free To Play") {
+          isFreeGame = true;
+        } else if (priceRaw) {
+          // Find digits and commas/dots. e.g. "59,99€" -> "59.99"
+          const match = priceRaw.match(/[\d.,]+/);
+          if (match) {
+            priceDollars = parseFloat(match[0].replace(",", "."));
+            if (priceDollars === 0) isFreeGame = true;
+          }
+        }
+
+        games.push({
           appId,
-          name: item.name,
-          type: item.type ?? "game",
-          isFree: isFree,
-          price: isFree ? "Gratis" : priceDollars,
-          tinyImage: item.logo
-            ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
-        };
+          name,
+          type: "game",
+          isFree: isFreeGame,
+          price: isFreeGame ? "Gratis" : priceDollars,
+          tinyImage
+        });
       });
+    }
 
     res.json({
       games,
