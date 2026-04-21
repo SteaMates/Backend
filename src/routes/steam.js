@@ -327,6 +327,61 @@ router.get("/search", async (req, res) => {
   }
 });
 
+// GET /api/steam/free-games - Browse free games from Steam Store with sorting & pagination
+router.get("/free-games", async (req, res) => {
+  try {
+    // Map frontend sortBy values to Steam Store sort_by params
+    const SORT_MAP = {
+      "Reviews_DESC":  "Reviews_DESC",   // Best rated
+      "Released_DESC": "Released_DESC",  // Most recent
+      "Price_ASC":     "Price_ASC",      // Cheapest (all free, but keeps order)
+      "Discount_DESC": "Discount_DESC",  // Most discounted
+    };
+    const sort     = SORT_MAP[req.query.sort] ?? "Reviews_DESC";
+    const page     = Math.max(0, parseInt(req.query.page) || 0);
+    const start    = page * 40;
+
+    const url = new URL("https://store.steampowered.com/search/results/");
+    url.searchParams.set("json",       "1");
+    url.searchParams.set("maxprice",   "free");
+    url.searchParams.set("count",      "40");
+    url.searchParams.set("start",      start.toString());
+    url.searchParams.set("sort_by",    sort);
+    url.searchParams.set("os",         "win");
+    // Do NOT restrict with type=0 — it can be too strict for some regions
+
+    const response = await fetch(url.toString());
+    const data     = await response.json();
+
+    const NON_GAME = new Set(["dlc", "music", "video", "hardware", "bundle"]);
+
+    const games = (data.items ?? [])
+      .filter((item) => !NON_GAME.has(item.type))
+      .map((item) => {
+        const appId = item.appid?.toString() ?? "";
+        return {
+          appId,
+          name: item.name,
+          type: item.type ?? "game",
+          isFree: true,
+          price: 0,
+          // Steam search results use 'logo' not 'tiny_image'
+          tinyImage: item.logo
+            ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+        };
+      });
+
+    res.json({
+      games,
+      hasMore: (data.total_count ?? 0) > start + 40,
+    });
+  } catch (error) {
+    console.error("Steam free-games error:", error);
+    res.status(500).json({ error: "Error fetching free games" });
+  }
+});
+
+
 // GET /api/steam/app/:appId - Get Steam app details from Steam Store API
 router.get("/app/:appId", async (req, res) => {
   try {
