@@ -297,12 +297,22 @@ router.get("/search", async (req, res) => {
       return res.json([]);
     }
 
-    const games = data.items.map((item) => ({
-      appId: item.id,
-      name: item.name,
-      price: item.price ? (item.price / 100).toFixed(2) + "€" : "Free",
-      tinyImage: item.tiny_image,
-    }));
+    // Only include actual games — exclude DLCs, soundtracks, cosmetics, bundles, etc.
+    const games = data.items
+      .filter((item) => item.type === "game")
+      .map((item) => {
+        const isFree = item.price === undefined || item.price === null || item.price === 0;
+        const priceAmount = isFree ? 0 : item.price;   // price in cents (e.g. 999 = $9.99)
+        return {
+          appId: item.id,
+          name: item.name,
+          type: item.type,
+          isFree,
+          // price in dollars as number (0 = free)
+          price: isFree ? 0 : parseFloat((priceAmount / 100).toFixed(2)),
+          tinyImage: item.tiny_image,
+        };
+      });
 
     res.json(games);
   } catch (error) {
