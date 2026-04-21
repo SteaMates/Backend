@@ -297,19 +297,25 @@ router.get("/search", async (req, res) => {
       return res.json([]);
     }
 
-    // Only include actual games — exclude DLCs, soundtracks, cosmetics, bundles, etc.
+    // Exclude known non-game types (DLC, soundtrack, video, hardware, bundle).
+    // Using a blocklist so items whose type is absent or unknown are kept.
+    const NON_GAME_TYPES = new Set(["dlc", "music", "video", "hardware", "bundle"]);
+
     const games = data.items
-      .filter((item) => item.type === "game")
+      .filter((item) => !NON_GAME_TYPES.has(item.type))
       .map((item) => {
-        const isFree = item.price === undefined || item.price === null || item.price === 0;
-        const priceAmount = isFree ? 0 : item.price;   // price in cents (e.g. 999 = $9.99)
+        // storesearch returns price as an OBJECT: { currency, initial, final, discount_percent }
+        // For free games price is null/undefined.
+        const priceObj = item.price;  // object or null
+        const isFree = !priceObj || priceObj.final === 0;
+        const priceDollars = isFree ? 0 : parseFloat((priceObj.final / 100).toFixed(2));
+
         return {
           appId: item.id,
           name: item.name,
-          type: item.type,
+          type: item.type ?? "game",
           isFree,
-          // price in dollars as number (0 = free)
-          price: isFree ? 0 : parseFloat((priceAmount / 100).toFixed(2)),
+          price: priceDollars,   // number in dollars, 0 = free
           tinyImage: item.tiny_image,
         };
       });
