@@ -444,7 +444,6 @@ router.get("/by-tags", async (req, res) => {
   }
 });
 
-});
 
 // In-memory cache for SteamSpy top 100 most played games
 let top100Cache = { data: null, timestamp: 0 };
