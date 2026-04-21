@@ -379,6 +379,71 @@ router.get("/free-games", async (req, res) => {
   }
 });
 
+// GET /api/steam/by-tags - Browse games by Steam tags
+router.get("/by-tags", async (req, res) => {
+  try {
+    const SORT_MAP = {
+      "Reviews_DESC":  "Reviews_DESC",
+      "Released_DESC": "Released_DESC",
+      "Price_ASC":     "Price_ASC",
+      "Discount_DESC": "Discount_DESC",
+    };
+    const sort   = SORT_MAP[req.query.sort] ?? "Reviews_DESC";
+    const page   = Math.max(0, parseInt(req.query.page) || 0);
+    const tags   = req.query.tags || "";
+    const isFree = req.query.isFree === "true";
+    const start  = page * 40;
+
+    const url = new URL("https://store.steampowered.com/search/results/");
+    url.searchParams.set("json",    "1");
+    url.searchParams.set("count",   "40");
+    url.searchParams.set("start",   start.toString());
+    url.searchParams.set("sort_by", sort);
+    url.searchParams.set("os",      "win");
+    url.searchParams.set("category1", "998"); // Games only
+    if (tags) {
+      url.searchParams.set("tags", tags);
+    }
+    if (isFree) {
+      url.searchParams.set("maxprice", "free");
+    }
+
+    const response = await fetch(url.toString());
+    const data     = await response.json();
+
+    const NON_GAME = new Set(["dlc", "music", "video", "hardware", "bundle"]);
+
+    const games = (data.items ?? [])
+      .filter((item) => !NON_GAME.has(item.type))
+      .map((item) => {
+        const appId = item.appid?.toString() ?? "";
+        // price comes as string e.g. "59,99€" — parse cents if available
+        const priceRaw = item.price ?? item.final_price ?? null;
+        const priceCents = typeof priceRaw === "number" ? priceRaw : null;
+        const priceDollars = priceCents !== null ? parseFloat((priceCents / 100).toFixed(2)) : null;
+        const isFree = priceCents === 0 || !!item.is_free;
+        
+        return {
+          appId,
+          name: item.name,
+          type: item.type ?? "game",
+          isFree: isFree,
+          price: isFree ? "Gratis" : priceDollars,
+          tinyImage: item.logo
+            ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+        };
+      });
+
+    res.json({
+      games,
+      hasMore: (data.total_count ?? 0) > start + 40,
+    });
+  } catch (error) {
+    console.error("Steam by-tags error:", error);
+    res.status(500).json({ error: "Error fetching games by tags" });
+  }
+});
+
 });
 
 // In-memory cache for SteamSpy top 100 most played games
