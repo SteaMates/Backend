@@ -332,12 +332,13 @@ router.get("/free-games", async (req, res) => {
   try {
     // Map frontend sortBy values to Steam Store sort_by params
     const SORT_MAP = {
-      "Reviews_DESC":  "Reviews_DESC",   // Most popular
+      "_ASC":          "_ASC",
+      "Reviews_DESC":  "Reviews_DESC",   // Most popular (Highest rated)
       "Released_DESC": "Released_DESC",  // Most recent
       "Price_ASC":     "Price_ASC",      // Cheapest
       "Discount_DESC": "Discount_DESC",  // Most discounted
     };
-    const sort     = SORT_MAP[req.query.sort] ?? "Reviews_DESC";
+    const sort     = SORT_MAP[req.query.sort] ?? "_ASC";
     const page     = Math.max(0, parseInt(req.query.page) || 0);
     const start    = page * 40;
 
@@ -383,12 +384,13 @@ router.get("/free-games", async (req, res) => {
 router.get("/by-tags", async (req, res) => {
   try {
     const SORT_MAP = {
+      "_ASC":          "_ASC",
       "Reviews_DESC":  "Reviews_DESC",
       "Released_DESC": "Released_DESC",
       "Price_ASC":     "Price_ASC",
       "Discount_DESC": "Discount_DESC",
     };
-    const sort   = SORT_MAP[req.query.sort] ?? "Reviews_DESC";
+    const sort   = SORT_MAP[req.query.sort] ?? "_ASC";
     const page   = Math.max(0, parseInt(req.query.page) || 0);
     const tags   = req.query.tags || "";
     const isFree = req.query.isFree === "true";
