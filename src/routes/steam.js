@@ -332,9 +332,9 @@ router.get("/free-games", async (req, res) => {
   try {
     // Map frontend sortBy values to Steam Store sort_by params
     const SORT_MAP = {
-      "Reviews_DESC":  "Reviews_DESC",   // Best rated
+      "Reviews_DESC":  "Reviews_DESC",   // Most popular
       "Released_DESC": "Released_DESC",  // Most recent
-      "Price_ASC":     "Price_ASC",      // Cheapest (all free, but keeps order)
+      "Price_ASC":     "Price_ASC",      // Cheapest
       "Discount_DESC": "Discount_DESC",  // Most discounted
     };
     const sort     = SORT_MAP[req.query.sort] ?? "Reviews_DESC";
@@ -348,7 +348,6 @@ router.get("/free-games", async (req, res) => {
     url.searchParams.set("start",      start.toString());
     url.searchParams.set("sort_by",    sort);
     url.searchParams.set("os",         "win");
-    // Do NOT restrict with type=0 — it can be too strict for some regions
 
     const response = await fetch(url.toString());
     const data     = await response.json();
@@ -365,7 +364,6 @@ router.get("/free-games", async (req, res) => {
           type: item.type ?? "game",
           isFree: true,
           price: 0,
-          // Steam search results use 'logo' not 'tiny_image'
           tinyImage: item.logo
             ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
         };
@@ -381,6 +379,137 @@ router.get("/free-games", async (req, res) => {
   }
 });
 
+// GET /api/steam/popular-paid - Browse popular paid games from Steam Store (sorted by reviews)
+router.get("/popular-paid", async (req, res) => {
+  try {
+    const SORT_MAP = {
+      "Reviews_DESC":  "Reviews_DESC",
+      "Released_DESC": "Released_DESC",
+      "Price_ASC":     "Price_ASC",
+      "Discount_DESC": "Discount_DESC",
+    };
+    const sort  = SORT_MAP[req.query.sort] ?? "Reviews_DESC";
+    const page  = Math.max(0, parseInt(req.query.page) || 0);
+    const start = page * 40;
+
+    const url = new URL("https://store.steampowered.com/search/results/");
+    url.searchParams.set("json",    "1");
+    url.searchParams.set("count",   "40");
+    url.searchParams.set("start",   start.toString());
+    url.searchParams.set("sort_by", sort);
+    url.searchParams.set("os",      "win");
+    // category1=998 restricts to Games only (no software, DLC, etc.)
+    url.searchParams.set("category1", "998");
+    // Only paid games: exclude free (minprice=1 cent filters out free)
+    url.searchParams.set("minprice", "1");
+
+    const response = await fetch(url.toString());
+    const data     = await response.json();
+
+    const NON_GAME = new Set(["dlc", "music", "video", "hardware", "bundle"]);
+
+    const games = (data.items ?? [])
+      .filter((item) => !NON_GAME.has(item.type))
+      .map((item) => {
+        const appId = item.appid?.toString() ?? "";
+        // price comes as string e.g. "59,99€" — parse cents if available
+        const priceRaw = item.price ?? item.final_price ?? null;
+        const priceCents = typeof priceRaw === "number" ? priceRaw : null;
+        const priceDollars = priceCents !== null ? parseFloat((priceCents / 100).toFixed(2)) : null;
+        return {
+          appId,
+          name: item.name,
+          type: item.type ?? "game",
+          isFree: false,
+          price: priceDollars,
+          tinyImage: item.logo
+            ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+        };
+      });
+
+    res.json({
+      games,
+      hasMore: (data.total_count ?? 0) > start + 40,
+    });
+  } catch (error) {
+    console.error("Steam popular-paid error:", error);
+    res.status(500).json({ error: "Error fetching popular paid games" });
+  }
+});
+
+// GET /api/steam/tags?appIds=111,222,333 - Get SteamSpy tags for a list of appIds (cached in MongoDB)
+// Non-blocking for the user: returns whatever is cached immediately, fetches missing ones async.
+router.get("/tags", async (req, res) => {
+  try {
+    const raw = typeof req.query.appIds === "string" ? req.query.appIds : "";
+    if (!raw) return res.json({});
+
+    const appIds = [...new Set(raw.split(",").map(s => s.trim()).filter(Boolean))].slice(0, 60);
+
+    // Fetch all cached entries in one DB query
+    const TAGS_TTL_DAYS = 7;
+    const cutoff = new Date(Date.now() - TAGS_TTL_DAYS * 24 * 60 * 60 * 1000);
+
+    const cached = await GameCache.find({ appId: { $in: appIds } });
+    const cachedMap = {};
+    const stale = [];
+
+    for (const doc of cached) {
+      const id = doc.appId.toString();
+      if (doc.tags && doc.tags.length > 0 && doc.tagsUpdated && doc.tagsUpdated > cutoff) {
+        // Fresh cache hit — use immediately
+        cachedMap[id] = doc.tags;
+      } else {
+        // Stale or missing tags — needs refresh
+        stale.push(id);
+      }
+    }
+
+    // Any appId not in DB at all also needs fetching
+    const cachedIds = new Set(cached.map(d => d.appId.toString()));
+    const missing = appIds.filter(id => !cachedIds.has(id));
+    const toFetch = [...stale, ...missing];
+
+    // Respond immediately with whatever we have cached
+    res.json(cachedMap);
+
+    // Fetch missing/stale tags from SteamSpy in background (fire-and-forget)
+    if (toFetch.length > 0) {
+      (async () => {
+        for (const appId of toFetch) {
+          try {
+            const spyRes = await fetch(
+              `https://steamspy.com/api.php?request=appdetails&appid=${appId}`
+            );
+            if (!spyRes.ok) continue;
+            const spyData = await spyRes.json();
+            const tagsObj = spyData?.tags;
+            if (!tagsObj || typeof tagsObj !== "object") continue;
+
+            // Sort by vote count descending, keep top 20 tag names
+            const tags = Object.entries(tagsObj)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 20)
+              .map(([name]) => name);
+
+            await GameCache.findOneAndUpdate(
+              { appId },
+              { $set: { tags, tagsUpdated: new Date() } },
+              { upsert: true, new: true },
+            );
+          } catch (err) {
+            console.error(`SteamSpy tags error for ${appId}:`, err.message);
+          }
+          // SteamSpy rate limit: 1 req/s
+          await new Promise(r => setTimeout(r, 1050));
+        }
+      })().catch(err => console.error("Background tags fetch error:", err));
+    }
+  } catch (error) {
+    console.error("Steam tags error:", error);
+    res.status(500).json({ error: "Error fetching game tags" });
+  }
+});
 
 // GET /api/steam/app/:appId - Get Steam app details from Steam Store API
 router.get("/app/:appId", async (req, res) => {

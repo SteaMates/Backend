@@ -26,6 +26,13 @@ const gameCacheSchema = new mongoose.Schema({
         type: String,
         default: '',
     },
+    tags: [{
+        type: String,
+    }],
+    tagsUpdated: {
+        type: Date,
+        default: null,
+    },
     lastUpdated: {
         type: Date,
         default: Date.now,
