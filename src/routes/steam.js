@@ -908,5 +908,23 @@ router.post("/games-info", async (req, res) => {
     res.status(500).json({ error: "Error fetching game information" });
   }
 });
+// GET /api/steam/players/:appId - Get current active players
+router.get("/players/:appId", async (req, res) => {
+  try {
+    const { appId } = req.params;
+    const response = await fetch(`https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${appId}`);
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "Steam API returned error" });
+    }
+    const data = await response.json();
+    res.json({
+      player_count: data.response?.player_count || 0,
+      result: data.response?.result || 0
+    });
+  } catch (error) {
+    console.error("Steam player count error:", error);
+    res.status(500).json({ error: "Error fetching Steam player count" });
+  }
+});
 
 export default router;
