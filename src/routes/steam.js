@@ -379,61 +379,50 @@ router.get("/free-games", async (req, res) => {
   }
 });
 
-// GET /api/steam/popular-paid - Browse popular paid games from Steam Store (sorted by reviews)
-router.get("/popular-paid", async (req, res) => {
+});
+
+// In-memory cache for SteamSpy top 100 most played games
+let top100Cache = { data: null, timestamp: 0 };
+
+// GET /api/steam/most-played - Browse most played games (top 100 in 2 weeks from SteamSpy)
+router.get("/most-played", async (req, res) => {
   try {
-    const SORT_MAP = {
-      "Reviews_DESC":  "Reviews_DESC",
-      "Released_DESC": "Released_DESC",
-      "Price_ASC":     "Price_ASC",
-      "Discount_DESC": "Discount_DESC",
-    };
-    const sort  = SORT_MAP[req.query.sort] ?? "Reviews_DESC";
-    const page  = Math.max(0, parseInt(req.query.page) || 0);
-    const start = page * 40;
-
-    const url = new URL("https://store.steampowered.com/search/results/");
-    url.searchParams.set("json",    "1");
-    url.searchParams.set("count",   "40");
-    url.searchParams.set("start",   start.toString());
-    url.searchParams.set("sort_by", sort);
-    url.searchParams.set("os",      "win");
-    // category1=998 restricts to Games only (no software, DLC, etc.)
-    url.searchParams.set("category1", "998");
-    // Only paid games: exclude free (minprice=1 cent filters out free)
-    url.searchParams.set("minprice", "1");
-
-    const response = await fetch(url.toString());
-    const data     = await response.json();
-
-    const NON_GAME = new Set(["dlc", "music", "video", "hardware", "bundle"]);
-
-    const games = (data.items ?? [])
-      .filter((item) => !NON_GAME.has(item.type))
-      .map((item) => {
-        const appId = item.appid?.toString() ?? "";
-        // price comes as string e.g. "59,99€" — parse cents if available
-        const priceRaw = item.price ?? item.final_price ?? null;
-        const priceCents = typeof priceRaw === "number" ? priceRaw : null;
-        const priceDollars = priceCents !== null ? parseFloat((priceCents / 100).toFixed(2)) : null;
+    const page = Math.max(0, parseInt(req.query.page) || 0);
+    const now = Date.now();
+    
+    // Cache for 1 hour
+    if (!top100Cache.data || now - top100Cache.timestamp > 1000 * 60 * 60) {
+      const response = await fetch("https://steamspy.com/api.php?request=top100in2weeks");
+      const data = await response.json();
+      
+      // Data is an object with game objects, sort by ccu (concurrent users / popularity)
+      const gamesArray = Object.values(data).sort((a, b) => b.ccu - a.ccu);
+      
+      top100Cache.data = gamesArray.map(item => {
+        const appId = item.appid.toString();
+        const priceDollars = item.price == "0" ? "Gratis" : parseFloat((parseInt(item.price) / 100).toFixed(2));
         return {
           appId,
           name: item.name,
-          type: item.type ?? "game",
-          isFree: false,
+          type: "game",
+          isFree: item.price == "0",
           price: priceDollars,
-          tinyImage: item.logo
-            ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+          tinyImage: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`
         };
       });
-
+      top100Cache.timestamp = now;
+    }
+    
+    const start = page * 40;
+    const pageData = top100Cache.data.slice(start, start + 40);
+    
     res.json({
-      games,
-      hasMore: (data.total_count ?? 0) > start + 40,
+      games: pageData,
+      hasMore: start + 40 < top100Cache.data.length
     });
   } catch (error) {
-    console.error("Steam popular-paid error:", error);
-    res.status(500).json({ error: "Error fetching popular paid games" });
+    console.error("Steam most-played error:", error);
+    res.status(500).json({ error: "Error fetching most played games" });
   }
 });
 
