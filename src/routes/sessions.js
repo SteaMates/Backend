@@ -242,6 +242,72 @@ router.patch("/:id/respond", verifyToken, async (req, res) => {
   }
 });
 
+
+/**
+ * PATCH /api/sessions/:id/leave
+ * Participant abandons a session they previously accepted or were invited to.
+ */
+router.patch("/:id/leave", verifyToken, async (req, res) => {
+  try {
+    const session = await GamingSession.findById(req.params.id)
+      .populate("host", "steamId username avatar")
+      .populate("participants.user", "steamId username avatar");
+
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    if (session.status === "cancelled") {
+      return res.status(400).json({ error: "Session is already cancelled" });
+    }
+
+    // Host cannot leave — they can only cancel
+    if (session.host._id.equals(req.user._id)) {
+      return res.status(400).json({ error: "Host cannot leave. Use cancel instead." });
+    }
+
+    const participant = session.participants.find((p) =>
+      p.user?._id?.equals(req.user._id)
+    );
+
+    if (!participant) {
+      return res.status(403).json({ error: "You are not a participant" });
+    }
+
+    participant.status = "declined";
+    participant.respondedAt = new Date();
+    await session.save();
+
+    // Notify host
+    const expiresAt = expiresAtFromNow();
+    await Notification.create({
+      recipient: session.host._id,
+      from: req.user._id,
+      type: "session_response",
+      title: "Abandono de sesión",
+      message: `${req.user.username} ha abandonado la sesión de ${session.game.name} (${session.date} ${session.time}).`,
+      session: session._id,
+      data: {
+        response: "declined",
+        game: session.game,
+        date: session.date,
+        time: session.time,
+      },
+      readAt: null,
+      expiresAt,
+    });
+
+    const updated = await GamingSession.findById(session._id)
+      .populate("host", "steamId username avatar")
+      .populate("participants.user", "steamId username avatar");
+
+    return res.json({ session: updated });
+  } catch (error) {
+    console.error("Leave session error:", error);
+    return res.status(500).json({ error: "Error leaving session" });
+  }
+});
+
 /**
  * PATCH /api/sessions/:id/cancel
  * Only host can cancel the session.
