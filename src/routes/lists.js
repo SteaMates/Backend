@@ -108,7 +108,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
 router.get('/:id/comments', async (req, res) => {
   try {
     const comments = await Comment.find({ list: req.params.id })
-      .populate('author', 'username avatar')
+      .populate('author', 'username avatar steamId')
       .sort({ createdAt: -1 });
     res.json(comments);
   } catch (error) {
@@ -129,7 +129,7 @@ router.post('/:id/comments', verifyToken, requireCanPublish, async (req, res) =>
       content
     });
     const saved = await newComment.save();
-    await saved.populate('author', 'username avatar');
+    await saved.populate('author', 'username avatar steamId');
     
     res.status(201).json(saved);
   } catch (error) {
