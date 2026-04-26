@@ -37,8 +37,16 @@ function firstDefined(...values) {
 
 function toTimestampMs(raw) {
   if (raw === undefined || raw === null) return null;
+  
+  // Handle ISO strings or other date formats
+  if (typeof raw === "string" && isNaN(Number(raw))) {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+
   const n = Number(raw);
   if (!Number.isFinite(n)) return null;
+  // If it's a small number, assume it's seconds (standard for ITAD/CheapShark)
   return n > 1_000_000_000_000 ? Math.floor(n) : Math.floor(n * 1000);
 }
 
@@ -96,7 +104,19 @@ function extractItadGameId(payload) {
 }
 
 function normalizeItadHistory(payload) {
+  if (!payload || typeof payload !== "object") return [];
+
   const possibleArrays = [];
+
+  // ITAD v2 history/v2 returns an object where keys are UUIDs and values are arrays
+  // Example: { "uuid-123": [ {time: "...", price: {...}}, ... ] }
+  if (!Array.isArray(payload)) {
+    for (const key in payload) {
+      if (Array.isArray(payload[key])) {
+        possibleArrays.push(payload[key]);
+      }
+    }
+  }
 
   if (Array.isArray(payload)) possibleArrays.push(payload);
   if (Array.isArray(payload?.data)) possibleArrays.push(payload.data);
