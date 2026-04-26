@@ -213,10 +213,15 @@ function pickBestCheapSharkDeal(rawDeals) {
   if (!Array.isArray(rawDeals) || rawDeals.length === 0) return null;
 
   const valid = rawDeals.filter((deal) => Number.parseFloat(deal?.savings || '0') > 0);
-  if (valid.length === 0) return null;
-
-  return valid.sort(
-    (a, b) => Number.parseFloat(b?.savings || '0') - Number.parseFloat(a?.savings || '0')
+  if (valid.length > 0) {
+    return valid.sort(
+      (a, b) => Number.parseFloat(b?.savings || '0') - Number.parseFloat(a?.savings || '0')
+    )[0];
+  }
+  
+  // Fallback if no game is technically on sale: return the one with the lowest price.
+  return rawDeals.sort(
+    (a, b) => Number.parseFloat(a?.salePrice || '999') - Number.parseFloat(b?.salePrice || '999')
   )[0];
 }
 
@@ -253,21 +258,21 @@ router.post('/market-recommendations', async (req, res) => {
 
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      temperature: 0.2,
+      temperature: 0.3,
       max_tokens: 1000,
       top_p: 0.9,
       messages: [
         {
           role: 'system',
           content:
-            'Eres un recomendador de juegos de Steam. Devuelve SIEMPRE JSON válido, sin markdown, sin texto extra. Formato exacto: [{"title":"string","reason":"string"}]',
+            'Eres un recomendador de juegos de Steam. Devuelve SIEMPRE JSON válido un array de objetos [{"title":"string","reason":"string"}].',
         },
         {
           role: 'user',
           content:
-            `Estos son los juegos jugados del usuario: ${topGames.join(', ')}. ` +
-            `Recomienda ${maxItems + 3} juegos de PC en Steam que encajen con sus gustos y NO estén ya en su biblioteca. ` +
-            'Cada elemento debe incluir title y reason (máximo 1 frase). Solo devuelve el JSON puro.',
+            `Juegos de este usuario: ${topGames.join(', ')}. ` +
+            `Inventate una lista con ${maxItems + 6} juegos de PC muy populares y aclamados que encajen perfectísimamente con sus gustos o sean imprescindibles de esos géneros y NO estén en su lista y pon su nombre EXACTO de la tienda.` +
+            'Cada elemento debe incluir title y reason (una frase). Solo devuelve JSON.',
         },
       ],
     });
