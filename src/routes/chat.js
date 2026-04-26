@@ -84,10 +84,12 @@ async function fetchSteamContext(steamId) {
         const fpRes = await fetch(
           `${STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v0002/?key=${apiKey}&steamids=${friendIds}`
         );
-        const fpData = await fpRes.json();
-        friendProfiles = fpData.response?.players || [];
-      } catch {
-        // ignore
+        if (fpRes.ok) {
+          const fpData = await fpRes.json();
+          friendProfiles = fpData.response?.players || [];
+        }
+      } catch (err) {
+        console.error('Error fetching friend profiles:', err.message);
       }
     }
 
@@ -256,9 +258,13 @@ router.post('/market-recommendations', async (req, res) => {
 
     const lowerOwned = new Set(topGames.map((name) => name.toLowerCase()));
 
+    const baseURL = groq.opts?.baseURL || '';
+    const isOpenRouter = baseURL.includes('openrouter.ai');
+    const model = isOpenRouter ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile';
+
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      temperature: 0.3,
+      model,
+      temperature: 0.7,
       max_tokens: 1000,
       top_p: 0.9,
       messages: [
@@ -320,7 +326,9 @@ router.post('/market-recommendations', async (req, res) => {
     return res.json({ deals: foundDeals });
   } catch (error) {
     console.error('Market recommendations error:', error);
-    return res.status(500).json({ error: 'Error generating market recommendations' });
+    const statusCode = error?.status || 500;
+    const message = error?.message || 'Error generating market recommendations';
+    return res.status(statusCode).json({ error: message });
   }
 });
 
@@ -375,13 +383,18 @@ router.post('/message', async (req, res) => {
     // Build messages for Groq (include recent history for context, max 20 messages)
     const recentMessages = session.messages.slice(-20);
 
+    const baseURL = groq.opts?.baseURL || '';
+    const isOpenRouter = baseURL.includes('openrouter.ai');
+    
     // Determine which model to use based on whether we have an image
     const hasVision = !!image;
     
-    // Cambiado al modelo solicitado meta-llama/llama-4-scout-17b-16e-instruct para imágenes
-    // OJO: asegurate de que estés en un endpoint compatible con la ruta o que Groq suporte esta cadena,
-    // de lo contrario este modelo podría estar en ruta diferente.
-    const model = hasVision ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'llama-3.3-70b-versatile';
+    let model = 'llama-3.3-70b-versatile';
+    if (hasVision) {
+      model = isOpenRouter ? 'meta-llama/llama-3.2-11b-vision-instruct' : 'llama-3.2-11b-vision-preview';
+    } else if (isOpenRouter) {
+      model = 'meta-llama/llama-3.3-70b-instruct';
+    }
 
     let groqMessages;
 
