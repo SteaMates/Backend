@@ -253,9 +253,9 @@ router.post('/market-recommendations', async (req, res) => {
 
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      temperature: 0.35,
+      temperature: 0.1,
       max_tokens: 700,
-      top_p: 0.9,
+      top_p: 1.0,
       messages: [
         {
           role: 'system',
