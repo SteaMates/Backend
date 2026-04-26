@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as cheerio from "cheerio";
 import GameCache from "../models/GameCache.js";
+import { verifyToken } from "../middleware/auth.js";
 
 const router = Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
@@ -229,6 +230,7 @@ router.get("/profile/:steamId", async (req, res) => {
       username: player.personaname,
       avatar: player.avatarfull,
       profileUrl: player.profileurl,
+      communityVisibilityState: player.communityvisibilitystate || null,
       realName: player.realname || "",
       status: player.personastate,
       lastLogoff: player.lastlogoff,
@@ -241,6 +243,70 @@ router.get("/profile/:steamId", async (req, res) => {
     });
   } catch (error) {
     console.error("Steam profile error:", error);
+    res.status(500).json({ error: "Error fetching Steam profile" });
+  }
+});
+
+// GET /api/steam/me/profile - Get Steam profile for authenticated session user
+router.get("/me/profile", verifyToken, async (req, res) => {
+  try {
+    const apiKey = getSteamApiKey();
+    if (!apiKey) {
+      return res.status(503).json({ error: "Steam API key not configured" });
+    }
+
+    const steamId = req.user?.steamId;
+    if (!steamId) {
+      return res.status(400).json({ error: "Authenticated user has no steamId" });
+    }
+
+    const response = await fetch(
+      `${STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v0002/?key=${apiKey}&steamids=${steamId}`,
+    );
+    const data = await response.json();
+    const player = data.response?.players?.[0];
+
+    if (!player) {
+      return res.status(404).json({ error: "Player not found" });
+    }
+
+    let level = 0;
+    let xpCurrent = 0;
+    let xpTotal = 1;
+
+    try {
+      const badgesResponse = await fetch(
+        `${STEAM_API_BASE}/IPlayerService/GetBadges/v1/?key=${apiKey}&steamid=${steamId}`,
+      );
+      if (badgesResponse.ok) {
+        const badgesData = await badgesResponse.json();
+        level = badgesData.response?.player_level || 0;
+        xpCurrent = badgesData.response?.player_xp || 0;
+        const xpNeeded = badgesData.response?.player_xp_needed_to_level_up || 0;
+        xpTotal = xpCurrent + xpNeeded;
+      }
+    } catch (e) {
+      console.error("Error fetching steam badges:", e);
+    }
+
+    res.json({
+      steamId: player.steamid,
+      username: player.personaname,
+      avatar: player.avatarfull,
+      profileUrl: player.profileurl,
+      communityVisibilityState: player.communityvisibilitystate || null,
+      realName: player.realname || "",
+      status: player.personastate,
+      lastLogoff: player.lastlogoff,
+      memberSince: player.timecreated,
+      level,
+      xpCurrent,
+      xpTotal,
+      gameId: player.gameid || null,
+      gameExtraInfo: player.gameextrainfo || null,
+    });
+  } catch (error) {
+    console.error("Steam self profile error:", error);
     res.status(500).json({ error: "Error fetching Steam profile" });
   }
 });
@@ -292,13 +358,91 @@ router.get("/games/:steamId", async (req, res) => {
       libraryValue = games.length * 15;
     }
 
+    const gameCount = data.response?.game_count;
+    const hasData = games.length > 0;
+
     res.json({
       totalCount: data.response?.game_count || 0,
       games,
       libraryValue: Math.round(libraryValue),
+      dataStatus: {
+        hasData,
+        reason: hasData ? null : gameCount === 0 ? "no_games" : "private_or_unavailable",
+        gameCount: gameCount ?? games.length,
+      },
     });
   } catch (error) {
     console.error("Steam games error:", error);
+    res.status(500).json({ error: "Error fetching Steam games" });
+  }
+});
+
+// GET /api/steam/me/games - Get owned games for authenticated session user
+router.get("/me/games", verifyToken, async (req, res) => {
+  try {
+    const apiKey = getSteamApiKey();
+    if (!apiKey) {
+      return res.status(503).json({ error: "Steam API key not configured" });
+    }
+
+    const steamId = req.user?.steamId;
+    if (!steamId) {
+      return res.status(400).json({ error: "Authenticated user has no steamId" });
+    }
+
+    const response = await fetch(
+      `${STEAM_API_BASE}/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamId}&include_appinfo=1&include_played_free_games=1&format=json`,
+    );
+    const data = await response.json();
+
+    const games = (data.response?.games || []).map((game) => ({
+      appId: game.appid,
+      name: game.name,
+      playtime: game.playtime_forever,
+      lastPlayed: game.rtime_last_played,
+      icon: `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_icon_url}.jpg`,
+      logo: `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_logo_url}.jpg`,
+    }));
+
+    games.sort((a, b) => b.playtime - a.playtime);
+
+    let libraryValue = 0;
+    try {
+      const appIds = games.map((g) => g.appId);
+      const cachedGames = await GameCache.find({ appId: { $in: appIds } });
+      cachedGames.forEach((cg) => {
+        if (!cg.isFree && cg.price) {
+          libraryValue += cg.price;
+        }
+      });
+
+      const missingCount = games.length - cachedGames.length;
+      if (missingCount > 0) {
+        libraryValue += missingCount * 10;
+      }
+    } catch (e) {
+      console.error("Error computing library value:", e);
+    }
+
+    if (libraryValue === 0 && games.length > 0) {
+      libraryValue = games.length * 15;
+    }
+
+    const gameCount = data.response?.game_count;
+    const hasData = games.length > 0;
+
+    res.json({
+      totalCount: data.response?.game_count || 0,
+      games,
+      libraryValue: Math.round(libraryValue),
+      dataStatus: {
+        hasData,
+        reason: hasData ? null : gameCount === 0 ? "no_games" : "private_or_unavailable",
+        gameCount: gameCount ?? games.length,
+      },
+    });
+  } catch (error) {
+    console.error("Steam self games error:", error);
     res.status(500).json({ error: "Error fetching Steam games" });
   }
 });
@@ -832,6 +976,42 @@ router.get("/recent/:steamId", async (req, res) => {
     });
   } catch (error) {
     console.error("Steam recent games error:", error);
+    res.status(500).json({ error: "Error fetching recent games" });
+  }
+});
+
+// GET /api/steam/me/recent - Get recently played games for authenticated session user
+router.get("/me/recent", verifyToken, async (req, res) => {
+  try {
+    const apiKey = getSteamApiKey();
+    if (!apiKey) {
+      return res.status(503).json({ error: "Steam API key not configured" });
+    }
+
+    const steamId = req.user?.steamId;
+    if (!steamId) {
+      return res.status(400).json({ error: "Authenticated user has no steamId" });
+    }
+
+    const response = await fetch(
+      `${STEAM_API_BASE}/IPlayerService/GetRecentlyPlayedGames/v0001/?key=${apiKey}&steamid=${steamId}&count=10&format=json`,
+    );
+    const data = await response.json();
+
+    const games = (data.response?.games || []).map((game) => ({
+      appId: game.appid,
+      name: game.name,
+      playtime2Weeks: game.playtime_2weeks,
+      playtimeForever: game.playtime_forever,
+      icon: `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_icon_url}.jpg`,
+    }));
+
+    res.json({
+      totalCount: data.response?.total_count || 0,
+      games,
+    });
+  } catch (error) {
+    console.error("Steam self recent games error:", error);
     res.status(500).json({ error: "Error fetching recent games" });
   }
 });

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import GameCache from "../models/GameCache.js";
+import { verifyToken } from "../middleware/auth.js";
 
 const router = Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
@@ -369,6 +370,84 @@ router.get("/time/:steamId", async (req, res) => {
 
 // GET /api/steam/stats/genres/:steamId
 // Returns genre breakdown for GenreBreakdown chart
+router.get("/me/genres", verifyToken, async (req, res) => {
+  try {
+    const apiKey = getSteamApiKey();
+    if (!apiKey)
+      return res.status(503).json({ error: "Steam API key not configured" });
+
+    const steamId = req.user?.steamId;
+    if (!steamId) {
+      return res.status(400).json({ error: "Authenticated user has no steamId" });
+    }
+
+    const games = await fetchOwnedGames(steamId);
+    if (games.length === 0) {
+      return res.json({ genres: [], totalHours: 0 });
+    }
+
+    const sorted = [...games].sort(
+      (a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0),
+    );
+    const topGames = sorted.slice(0, 20).filter((g) => g.playtime_forever > 0);
+
+    const genreHours = {};
+    const genreGames = {};
+
+    for (const game of topGames) {
+      const gameInfo = await getGameGenres(game.appid);
+      if (gameInfo && gameInfo.genres) {
+        const hours = Math.round((game.playtime_forever || 0) / 60);
+        for (const genre of gameInfo.genres) {
+          genreHours[genre] = (genreHours[genre] || 0) + hours;
+          genreGames[genre] = (genreGames[genre] || 0) + 1;
+        }
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    const GENRE_COLORS = {
+      Acción: "#ef4444",
+      Action: "#ef4444",
+      Aventura: "#f59e0b",
+      Adventure: "#f59e0b",
+      RPG: "#8b5cf6",
+      Estrategia: "#3b82f6",
+      Strategy: "#3b82f6",
+      Simuladores: "#10b981",
+      Simulation: "#10b981",
+      Indie: "#ec4899",
+      Casual: "#06b6d4",
+      Carreras: "#f97316",
+      Racing: "#f97316",
+      Deportes: "#84cc16",
+      Sports: "#84cc16",
+      "Multijugador masivo": "#6366f1",
+      "Massively Multiplayer": "#6366f1",
+      Terror: "#991b1b",
+      Horror: "#991b1b",
+      "Disparos en primera persona": "#dc2626",
+      FPS: "#dc2626",
+    };
+
+    const totalHours = Object.values(genreHours).reduce((a, b) => a + b, 0);
+    const genres = Object.entries(genreHours)
+      .map(([name, hours]) => ({
+        name,
+        hours,
+        games: genreGames[name] || 0,
+        color: GENRE_COLORS[name] || "#64748b",
+      }))
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 8);
+
+    res.json({ genres, totalHours });
+  } catch (error) {
+    console.error("Stats self genres error:", error);
+    res.status(500).json({ error: "Error fetching genre stats" });
+  }
+});
+
 router.get("/genres/:steamId", async (req, res) => {
   try {
     const apiKey = getSteamApiKey();
@@ -447,6 +526,149 @@ router.get("/genres/:steamId", async (req, res) => {
 
 // GET /api/steam/stats/achievements/:steamId
 // Returns achievement stats for AchievementCharts
+router.get("/me/achievements", verifyToken, async (req, res) => {
+  try {
+    const apiKey = getSteamApiKey();
+    if (!apiKey)
+      return res.status(503).json({ error: "Steam API key not configured" });
+
+    const steamId = req.user?.steamId;
+    if (!steamId) {
+      return res.status(400).json({ error: "Authenticated user has no steamId" });
+    }
+
+    const games = await fetchOwnedGames(steamId);
+    if (!games || games.length === 0) {
+      return res.json({
+        completionRate: 0,
+        perfectGames: 0,
+        totalGamesPlayed: 0,
+        totalAchievements: 0,
+        rarestAchievement: null,
+        rarestAchievementsList: [],
+        recentAchievementsList: [],
+      });
+    }
+
+    const sorted = [...games].sort(
+      (a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0),
+    );
+    const topGames = sorted.slice(0, 10).filter((g) => g.playtime_forever > 0);
+
+    let totalAchievements = 0;
+    let totalUnlocked = 0;
+    let perfectGames = 0;
+    let rarestAchievement = null;
+    let allUnlockedAchievements = [];
+    let allLockedAchievements = [];
+
+    for (const game of topGames) {
+      try {
+        const achRes = await fetch(
+          `${STEAM_API_BASE}/ISteamUserStats/GetPlayerAchievements/v0001/?key=${apiKey}&steamid=${steamId}&appid=${game.appid}&l=spanish`,
+        );
+        const achData = await achRes.json();
+        const achievements = achData.playerstats?.achievements || [];
+
+        if (achievements.length > 0) {
+          const unlocked = achievements.filter((a) => a.achieved === 1);
+          const locked = achievements.filter((a) => a.achieved === 0);
+
+          totalAchievements += achievements.length;
+          totalUnlocked += unlocked.length;
+
+          if (unlocked.length === achievements.length) {
+            perfectGames++;
+          }
+
+          let globalPercentages = {};
+          try {
+            const globalRes = await fetch(
+              `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/?gameid=${game.appid}`,
+            );
+            const globalData = await globalRes.json();
+            (globalData.achievementpercentages?.achievements || []).forEach((a) => {
+              globalPercentages[a.name] = a.percent;
+            });
+          } catch {}
+
+          for (const ach of unlocked) {
+            const globalPercent = globalPercentages[ach.apiname];
+
+            const achDetails = {
+              name: ach.name || ach.apiname,
+              game: game.name,
+              globalPercent:
+                globalPercent !== undefined
+                  ? Math.round(globalPercent * 10) / 10
+                  : null,
+              unlockTime: ach.unlocktime,
+            };
+
+            allUnlockedAchievements.push(achDetails);
+
+            if (globalPercent !== undefined) {
+              if (
+                !rarestAchievement ||
+                globalPercent < rarestAchievement.globalPercent
+              ) {
+                rarestAchievement = achDetails;
+              }
+            }
+          }
+
+          if (locked.length > 0) {
+            for (const ach of locked) {
+              allLockedAchievements.push({
+                name: ach.name || ach.apiname,
+                game: game.name,
+                globalPercent: null,
+                unlockTime: 0,
+                unlocked: false,
+              });
+            }
+          }
+        }
+
+        await new Promise((r) => setTimeout(r, 300));
+      } catch {
+        continue;
+      }
+    }
+
+    const rarestArray = allUnlockedAchievements
+      .filter((a) => a.globalPercent !== null)
+      .sort((a, b) => a.globalPercent - b.globalPercent)
+      .slice(0, 4);
+
+    let recentArray = [...allUnlockedAchievements]
+      .sort((a, b) => (b.unlockTime || 0) - (a.unlockTime || 0))
+      .slice(0, 4);
+
+    if (recentArray.length === 0) {
+      recentArray = [...allLockedAchievements].slice(0, 4);
+    }
+
+    const completionRate =
+      totalAchievements > 0
+        ? Math.round((totalUnlocked / totalAchievements) * 100)
+        : 0;
+
+    res.json({
+      completionRate,
+      perfectGames,
+      totalGamesPlayed: topGames.length,
+      totalAchievements: totalUnlocked,
+      rarestAchievement,
+      rarestAchievementsList: rarestArray,
+      recentAchievementsList: recentArray,
+    });
+  } catch (error) {
+    console.error("Stats self achievements error:", error);
+    res.status(500).json({ error: "Error fetching achievement stats" });
+  }
+});
+
 router.get("/achievements/:steamId", async (req, res) => {
   try {
     const apiKey = getSteamApiKey();
