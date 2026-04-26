@@ -162,6 +162,40 @@ async function fetchCurrentDealForItem(item) {
     }
   }
 
+  // Fallback definitivo a Steam API si no hay ofertas en CheapShark
+  if (steamAppId) {
+    try {
+      const steamUrl = `https://store.steampowered.com/api/appdetails?appids=${steamAppId}`;
+      const response = await fetch(steamUrl);
+      if (response.ok) {
+        const data = await response.json();
+        if (data[steamAppId] && data[steamAppId].success) {
+          const appData = data[steamAppId].data;
+          let salePrice = "0.00";
+          let normalPrice = "0.00";
+          let savings = "0";
+
+          if (!appData.is_free && appData.price_overview) {
+            salePrice = (appData.price_overview.final / 100).toFixed(2);
+            normalPrice = (appData.price_overview.initial / 100).toFixed(2);
+            savings = appData.price_overview.discount_percent.toString();
+          }
+
+          return {
+            dealID: `steam-${steamAppId}`,
+            steamAppID: steamAppId,
+            title: appData.name,
+            salePrice,
+            normalPrice,
+            savings,
+          };
+        }
+      }
+    } catch {
+      // ignora
+    }
+  }
+
   return null;
 }
 

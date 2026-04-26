@@ -287,9 +287,10 @@ router.post('/market-recommendations', async (req, res) => {
     }
 
     const seen = new Set();
-    
-    // Fetch all recommendations in parallel
-    const dealPromises = recommendations.map(async (rec) => {
+    const foundDeals = [];
+
+    // Fetch recommendations sequentially to avoid CheapShark's strict 1 req/sec rate limit
+    for (const rec of recommendations) {
       const url = new URL('https://www.cheapshark.com/api/1.0/deals');
       url.searchParams.set('title', rec.title);
       url.searchParams.set('storeID', '1');
@@ -298,30 +299,25 @@ router.post('/market-recommendations', async (req, res) => {
 
       try {
         const response = await fetch(url.toString());
-        if (!response.ok) return null;
-        
-        const rawDeals = await response.json();
-        const bestDeal = pickBestCheapSharkDeal(rawDeals);
-        if (bestDeal) {
-          return { ...bestDeal, reason: rec.reason };
+        if (response.ok) {
+          const rawDeals = await response.json();
+          const bestDeal = pickBestCheapSharkDeal(rawDeals);
+          if (bestDeal && !seen.has(bestDeal.dealID)) {
+            seen.add(bestDeal.dealID);
+            foundDeals.push({ ...bestDeal, reason: rec.reason });
+          }
         }
       } catch (err) {
-        // Ignore individual title failures and keep trying others.
+        console.error('Error fetching deal for:', rec.title, err.message);
       }
-      return null;
-    });
 
-    const results = await Promise.all(dealPromises);
-    const foundDeals = [];
-    
-    for (const deal of results) {
-      if (deal && !seen.has(deal.dealID)) {
-        seen.add(deal.dealID);
-        foundDeals.push(deal);
-      }
+      if (foundDeals.length >= maxItems) break;
+      
+      // Basic rate limiting delay (300ms) to avoid 429 Too Many Requests
+      await new Promise(r => setTimeout(r, 300));
     }
 
-    return res.json({ deals: foundDeals.slice(0, maxItems) });
+    return res.json({ deals: foundDeals });
   } catch (error) {
     console.error('Market recommendations error:', error);
     return res.status(500).json({ error: 'Error generating market recommendations' });
