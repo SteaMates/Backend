@@ -271,7 +271,7 @@ router.post('/market-recommendations', async (req, res) => {
           role: 'user',
           content:
             `Juegos de este usuario: ${topGames.join(', ')}. ` +
-            `Inventate una lista con ${maxItems + 2} juegos de PC muy populares y aclamados que encajen perfectísimamente con sus gustos o sean imprescindibles de esos géneros y NO estén en su lista y pon su nombre EXACTO de la tienda.` +
+            `Inventate una lista con ${maxItems + 8} juegos de PC muy populares y aclamados que encajen perfectísimamente con sus gustos o sean imprescindibles de esos géneros y NO estén en su lista y pon su nombre EXACTO de la tienda.` +
             'Cada elemento debe incluir title y reason (una frase). Solo devuelve JSON.',
         },
       ],
@@ -280,7 +280,7 @@ router.post('/market-recommendations', async (req, res) => {
     const rawContent = completion.choices[0]?.message?.content || '[]';
     const recommendations = parseRecommendationResponse(rawContent)
       .filter((rec) => !lowerOwned.has(rec.title.toLowerCase()))
-      .slice(0, maxItems + 2);
+      .slice(0, maxItems + 8);
 
     if (recommendations.length === 0) {
       return res.json({ deals: [] });
@@ -313,8 +313,8 @@ router.post('/market-recommendations', async (req, res) => {
 
       if (foundDeals.length >= maxItems) break;
       
-      // Basic rate limiting delay (300ms) to avoid 429 Too Many Requests
-      await new Promise(r => setTimeout(r, 300));
+      // Basic rate limiting delay (400ms) to avoid 429 Too Many Requests
+      await new Promise(r => setTimeout(r, 400));
     }
 
     return res.json({ deals: foundDeals });

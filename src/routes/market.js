@@ -165,17 +165,21 @@ async function fetchCurrentDealForItem(item) {
   // Fallback definitivo a Steam API si no hay ofertas en CheapShark
   if (steamAppId) {
     try {
-      const steamUrl = `https://store.steampowered.com/api/appdetails?appids=${steamAppId}`;
+      const steamUrl = `https://store.steampowered.com/api/appdetails?appids=${steamAppId}&cc=us`;
       const response = await fetch(steamUrl);
       if (response.ok) {
         const data = await response.json();
         if (data[steamAppId] && data[steamAppId].success) {
           const appData = data[steamAppId].data;
-          let salePrice = "0.00";
-          let normalPrice = "0.00";
+          let salePrice = null;
+          let normalPrice = null;
           let savings = "0";
 
-          if (!appData.is_free && appData.price_overview) {
+          if (appData.is_free) {
+            salePrice = "0.00";
+            normalPrice = "0.00";
+            savings = "0";
+          } else if (appData.price_overview) {
             salePrice = (appData.price_overview.final / 100).toFixed(2);
             normalPrice = (appData.price_overview.initial / 100).toFixed(2);
             savings = appData.price_overview.discount_percent.toString();
@@ -203,9 +207,9 @@ function enrichWithLiveData(items, liveDataMap) {
   return items.map((item) => {
     const identity = findDealIdentity(item);
     const liveDeal = liveDataMap.get(identity) || null;
-    const currentPrice = toNumber(liveDeal?.salePrice);
-    const normalPrice = toNumber(liveDeal?.normalPrice);
-    const savings = toNumber(liveDeal?.savings);
+    const currentPrice = toNumber(liveDeal?.salePrice ?? item.salePrice ?? item.price);
+    const normalPrice = toNumber(liveDeal?.normalPrice ?? item.normalPrice);
+    const savings = toNumber(liveDeal?.savings ?? item.savings);
 
     return {
       ...item,
