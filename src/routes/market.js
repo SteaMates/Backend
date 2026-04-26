@@ -112,28 +112,57 @@ function mapDeal(deal) {
 }
 
 async function fetchCurrentDealForItem(item) {
-  const params = new URLSearchParams();
-  params.set("storeID", "1");
-  params.set("pageSize", "1");
-
   const steamAppId = normalizeText(item?.steamAppId);
+  const title = normalizeText(item?.title);
+
+  // Intentamos buscar por steamAppID primero
   if (steamAppId) {
-    params.set("steamAppID", steamAppId);
-  } else {
-    const title = normalizeText(item?.title);
-    if (!title) return null;
-    params.set("title", title);
+    try {
+      const params = new URLSearchParams();
+      params.set("storeID", "1");
+      params.set("steamAppID", steamAppId);
+      // Sin pageSize=1 para que devuelva todas las ofertas de la tienda (juego base + DLCs)
+      
+      const response = await fetch(`${CHEAPSHARK_BASE_URL}/deals?${params.toString()}`, {
+        headers: CHEAPSHARK_HEADERS,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          // Filtramos y devolvemos la oferta más barata o la que encaje exactamente
+          return data.sort((a, b) => parseFloat(a.salePrice) - parseFloat(b.salePrice))[0];
+        }
+      }
+    } catch {
+      // continua abajo
+    }
   }
 
-  const response = await fetch(`${CHEAPSHARK_BASE_URL}/deals?${params.toString()}`, {
-    headers: CHEAPSHARK_HEADERS,
-  });
+  // Fallback a buscar por title
+  if (title) {
+    try {
+      const params = new URLSearchParams();
+      params.set("storeID", "1");
+      params.set("title", title);
+      params.set("pageSize", "3");
 
-  if (!response.ok) return null;
+      const response = await fetch(`${CHEAPSHARK_BASE_URL}/deals?${params.toString()}`, {
+        headers: CHEAPSHARK_HEADERS,
+      });
 
-  const data = await response.json();
-  if (!Array.isArray(data) || data.length === 0) return null;
-  return data[0];
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return data[0];
+        }
+      }
+    } catch {
+      // ignora
+    }
+  }
+
+  return null;
 }
 
 function enrichWithLiveData(items, liveDataMap) {
