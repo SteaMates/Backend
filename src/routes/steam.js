@@ -436,7 +436,16 @@ router.get("/by-tags", async (req, res) => {
         if (!priceRaw) priceRaw = elem.find(".search_price").text().trim();
         
         let priceDollars = null;
+        let originalPriceDollars = null;
+        let discountPct = 0;
         let isFreeGame = isFree; // If the query was for isFree, they are all free
+
+        let originalRaw = elem.find(".discount_original_price").text().trim();
+        let discountRaw = elem.find(".discount_pct, .search_discount span").text().trim();
+        
+        if (discountRaw && discountRaw.includes("%")) {
+          discountPct = parseInt(discountRaw.replace("-", "").replace("%", "")) || 0;
+        }
 
         if (priceRaw.toLowerCase().includes("free") || priceRaw.toLowerCase().includes("gratis") || priceRaw === "Free To Play") {
           isFreeGame = true;
@@ -447,6 +456,12 @@ router.get("/by-tags", async (req, res) => {
             priceDollars = parseFloat(match[0].replace(",", "."));
             if (priceDollars === 0) isFreeGame = true;
           }
+          if (originalRaw) {
+             const oMatch = originalRaw.match(/[\d.,]+/);
+             if (oMatch) {
+               originalPriceDollars = parseFloat(oMatch[0].replace(",", "."));
+             }
+          }
         }
 
         games.push({
@@ -455,6 +470,8 @@ router.get("/by-tags", async (req, res) => {
           type: "game",
           isFree: isFreeGame,
           price: isFreeGame ? "Gratis" : priceDollars,
+          originalPrice: originalPriceDollars,
+          discountPct,
           tinyImage
         });
       });
@@ -491,12 +508,17 @@ router.get("/most-played", async (req, res) => {
       top100Cache.data = gamesArray.map(item => {
         const appId = item.appid.toString();
         const priceDollars = item.price == "0" ? "Gratis" : parseFloat((parseInt(item.price) / 100).toFixed(2));
+        const originalPriceDollars = item.initialprice ? parseFloat((parseInt(item.initialprice) / 100).toFixed(2)) : null;
+        const discountPct = item.discount ? parseInt(item.discount) : 0;
+        
         return {
           appId,
           name: item.name,
           type: "game",
           isFree: item.price == "0",
           price: priceDollars,
+          originalPrice: originalPriceDollars,
+          discountPct,
           tinyImage: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`
         };
       });
