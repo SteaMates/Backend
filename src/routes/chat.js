@@ -260,7 +260,7 @@ router.post('/market-recommendations', async (req, res) => {
 
     const baseURL = groq.opts?.baseURL || '';
     const isOpenRouter = baseURL.includes('openrouter.ai');
-    const model = isOpenRouter ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile';
+    const model = isOpenRouter ? 'meta-llama/llama-3.1-8b-instruct' : 'llama-3.1-8b-instant';
 
     const completion = await groq.chat.completions.create({
       model,
@@ -389,11 +389,10 @@ router.post('/message', async (req, res) => {
     // Determine which model to use based on whether we have an image
     const hasVision = !!image;
     
-    let model = 'llama-3.3-70b-versatile';
+    let model = isOpenRouter ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile';
     if (hasVision) {
+      // Vision models are required for images
       model = isOpenRouter ? 'meta-llama/llama-3.2-11b-vision-instruct' : 'llama-3.2-11b-vision-preview';
-    } else if (isOpenRouter) {
-      model = 'meta-llama/llama-3.3-70b-instruct';
     }
 
     let groqMessages;
