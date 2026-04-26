@@ -271,7 +271,7 @@ router.post('/market-recommendations', async (req, res) => {
           role: 'user',
           content:
             `Juegos de este usuario: ${topGames.join(', ')}. ` +
-            `Inventate una lista con ${maxItems + 6} juegos de PC muy populares y aclamados que encajen perfectísimamente con sus gustos o sean imprescindibles de esos géneros y NO estén en su lista y pon su nombre EXACTO de la tienda.` +
+            `Inventate una lista con ${maxItems + 2} juegos de PC muy populares y aclamados que encajen perfectísimamente con sus gustos o sean imprescindibles de esos géneros y NO estén en su lista y pon su nombre EXACTO de la tienda.` +
             'Cada elemento debe incluir title y reason (una frase). Solo devuelve JSON.',
         },
       ],
@@ -286,38 +286,42 @@ router.post('/market-recommendations', async (req, res) => {
       return res.json({ deals: [] });
     }
 
-    const foundDeals = [];
     const seen = new Set();
-
-    for (const rec of recommendations) {
+    
+    // Fetch all recommendations in parallel
+    const dealPromises = recommendations.map(async (rec) => {
       const url = new URL('https://www.cheapshark.com/api/1.0/deals');
       url.searchParams.set('title', rec.title);
       url.searchParams.set('storeID', '1');
-      url.searchParams.set('pageSize', '8');
+      url.searchParams.set('pageSize', '5');
       url.searchParams.set('sortBy', 'Savings');
-      url.searchParams.set('desc', '1');
 
       try {
-        const dealResponse = await fetch(url);
-        if (!dealResponse.ok) continue;
-
-        const dealList = await dealResponse.json();
-        const best = pickBestCheapSharkDeal(dealList);
-        if (!best) continue;
-
-        const uniqueKey = best.steamAppID || best.gameID || best.dealID || rec.title.toLowerCase();
-        if (seen.has(uniqueKey)) continue;
-
-        seen.add(uniqueKey);
-        foundDeals.push({ ...best, reason: rec.reason });
-
-        if (foundDeals.length >= maxItems) break;
-      } catch {
+        const response = await fetch(url.toString());
+        if (!response.ok) return null;
+        
+        const rawDeals = await response.json();
+        const bestDeal = pickBestCheapSharkDeal(rawDeals);
+        if (bestDeal) {
+          return { ...bestDeal, reason: rec.reason };
+        }
+      } catch (err) {
         // Ignore individual title failures and keep trying others.
+      }
+      return null;
+    });
+
+    const results = await Promise.all(dealPromises);
+    const foundDeals = [];
+    
+    for (const deal of results) {
+      if (deal && !seen.has(deal.dealID)) {
+        seen.add(deal.dealID);
+        foundDeals.push(deal);
       }
     }
 
-    return res.json({ deals: foundDeals });
+    return res.json({ deals: foundDeals.slice(0, maxItems) });
   } catch (error) {
     console.error('Market recommendations error:', error);
     return res.status(500).json({ error: 'Error generating market recommendations' });

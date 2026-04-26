@@ -112,111 +112,28 @@ function mapDeal(deal) {
 }
 
 async function fetchCurrentDealForItem(item) {
+  const params = new URLSearchParams();
+  params.set("storeID", "1");
+  params.set("pageSize", "1");
+
   const steamAppId = normalizeText(item?.steamAppId);
-  const title = normalizeText(item?.title);
-
-  // ── 1) Try /deals by steamAppID (best case: active deal with salePrice) ──
   if (steamAppId) {
-    try {
-      const params = new URLSearchParams({
-        storeID: "1",
-        pageSize: "10",
-        steamAppID: steamAppId,
-        sortBy: "Savings",
-        desc: "1",
-      });
-      const response = await fetch(`${CHEAPSHARK_BASE_URL}/deals?${params}`, {
-        headers: CHEAPSHARK_HEADERS,
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          // prefer cheapest deal
-          return data.sort((a, b) => parseFloat(a.salePrice) - parseFloat(b.salePrice))[0];
-        }
-      }
-    } catch { /* continue to fallback */ }
+    params.set("steamAppID", steamAppId);
+  } else {
+    const title = normalizeText(item?.title);
+    if (!title) return null;
+    params.set("title", title);
   }
 
-  // ── 2) Try /deals by title (catches games with gameID only) ──
-  if (title) {
-    try {
-      const params = new URLSearchParams({
-        storeID: "1",
-        pageSize: "5",
-        title,
-      });
-      const response = await fetch(`${CHEAPSHARK_BASE_URL}/deals?${params}`, {
-        headers: CHEAPSHARK_HEADERS,
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          // find exact title match first
-          const exact = data.find(d => d.title?.toLowerCase() === title.toLowerCase());
-          const best = exact || data[0];
-          // only return if steamAppID matches (avoid wrong games)
-          if (!steamAppId || !best.steamAppID || String(best.steamAppID) === steamAppId) {
-            return best;
-          }
-        }
-      }
-    } catch { /* continue */ }
-  }
+  const response = await fetch(`${CHEAPSHARK_BASE_URL}/deals?${params.toString()}`, {
+    headers: CHEAPSHARK_HEADERS,
+  });
 
-  // ── 3) Fall back to /games lookup for normal price (game exists but no active sale) ──
-  // We need the gameID for this. Use the cheapshark /games?id= endpoint.
-  // First get gameID via /deals without storeID filter
-  if (steamAppId) {
-    try {
-      const params = new URLSearchParams({
-        steamAppID: steamAppId,
-        pageSize: "1",
-      });
-      const r1 = await fetch(`${CHEAPSHARK_BASE_URL}/deals?${params}`, { headers: CHEAPSHARK_HEADERS });
-      if (r1.ok) {
-        const d1 = await r1.json();
-        const gameId = Array.isArray(d1) && d1[0]?.gameID ? d1[0].gameID : null;
-        if (gameId) {
-          const r2 = await fetch(`${CHEAPSHARK_BASE_URL}/games?id=${gameId}`, { headers: CHEAPSHARK_HEADERS });
-          if (r2.ok) {
-            const g2 = await r2.json();
-            // Build a synthetic deal from the cheapest store deal in the game metadata
-            const cheapestDeal = g2?.deals?.[0];
-            if (cheapestDeal) {
-              return {
-                salePrice: cheapestDeal.price,
-                normalPrice: cheapestDeal.retailPrice,
-                savings: cheapestDeal.savings,
-                steamAppID: steamAppId,
-                gameID: gameId,
-                dealID: cheapestDeal.dealID || "",
-                title: g2?.info?.title || title,
-                thumb: g2?.info?.thumb || "",
-                storeID: cheapestDeal.storeID || "1",
-              };
-            }
-            // No deals but game exists — use cheapestPriceEver as price reference
-            if (g2?.cheapestPriceEver?.price) {
-              return {
-                salePrice: g2.cheapestPriceEver.price,
-                normalPrice: g2.cheapestPriceEver.price,
-                savings: "0",
-                steamAppID: steamAppId,
-                gameID: gameId,
-                dealID: "",
-                title: g2?.info?.title || title,
-                thumb: g2?.info?.thumb || "",
-                storeID: "1",
-              };
-            }
-          }
-        }
-      }
-    } catch { /* ignore */ }
-  }
+  if (!response.ok) return null;
 
-  return null;
+  const data = await response.json();
+  if (!Array.isArray(data) || data.length === 0) return null;
+  return data[0];
 }
 
 function enrichWithLiveData(items, liveDataMap) {
