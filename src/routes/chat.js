@@ -253,9 +253,9 @@ router.post('/market-recommendations', async (req, res) => {
 
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      temperature: 0.1,
-      max_tokens: 700,
-      top_p: 1.0,
+      temperature: 0.2,
+      max_tokens: 1000,
+      top_p: 0.9,
       messages: [
         {
           role: 'system',
@@ -265,9 +265,9 @@ router.post('/market-recommendations', async (req, res) => {
         {
           role: 'user',
           content:
-            `Estos son los juegos más jugados del usuario: ${topGames.join(', ')}. ` +
-            'Recomienda 10 juegos de PC en Steam que encajen con sus gustos y NO estén ya en su biblioteca. ' +
-            'Cada elemento debe incluir title y reason (máximo 1 frase).',
+            `Estos son los juegos jugados del usuario: ${topGames.join(', ')}. ` +
+            `Recomienda ${maxItems + 3} juegos de PC en Steam que encajen con sus gustos y NO estén ya en su biblioteca. ` +
+            'Cada elemento debe incluir title y reason (máximo 1 frase). Solo devuelve el JSON puro.',
         },
       ],
     });
@@ -275,7 +275,7 @@ router.post('/market-recommendations', async (req, res) => {
     const rawContent = completion.choices[0]?.message?.content || '[]';
     const recommendations = parseRecommendationResponse(rawContent)
       .filter((rec) => !lowerOwned.has(rec.title.toLowerCase()))
-      .slice(0, 10);
+      .slice(0, maxItems + 2);
 
     if (recommendations.length === 0) {
       return res.json({ deals: [] });
