@@ -2,6 +2,7 @@ import { Router } from "express";
 import * as cheerio from "cheerio";
 import GameCache from "../models/GameCache.js";
 import { verifyToken } from "../middleware/auth.js";
+import User from "../models/User.js";
 
 const router = Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
@@ -225,7 +226,10 @@ router.get("/profile/:steamId", async (req, res) => {
       console.error("Error fetching steam badges:", e);
     }
 
+    const dbUser = await User.findOne({ steamId });
+
     res.json({
+      _id: dbUser ? dbUser._id : null,
       steamId: player.steamid,
       username: player.personaname,
       avatar: player.avatarfull,
@@ -289,7 +293,10 @@ router.get("/me/profile", verifyToken, async (req, res) => {
       console.error("Error fetching steam badges:", e);
     }
 
+    const dbUser = await User.findOne({ steamId });
+
     res.json({
+      _id: dbUser ? dbUser._id : null,
       steamId: player.steamid,
       username: player.personaname,
       avatar: player.avatarfull,
