@@ -5,6 +5,8 @@ import Report from '../models/Report.js';
 import ModerationAction from '../models/ModerationAction.js';
 import AuditLog from '../models/AuditLog.js';
 import User from '../models/User.js';
+import GameList from '../models/GameList.js';
+import Comment from '../models/Comment.js';
 
 const router = Router();
 
@@ -155,6 +157,7 @@ router.get('/reports', verifyToken, requireAdmin, async (req, res) => {
     const reports = await Report.find(filter)
       .populate('reportedBy', 'username avatar')
       .populate('resolvedBy', 'username')
+      .populate('targetId')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -172,6 +175,94 @@ router.get('/reports', verifyToken, requireAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Error listando reportes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/moderation/content/:type/:id - Eliminar contenido reportado (admin only)
+router.delete('/content/:type/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { type, id } = req.params;
+
+    if (type === 'list') {
+      const list = await GameList.findById(id);
+      if (!list) return res.status(404).json({ error: 'Lista no encontrada' });
+      await GameList.findByIdAndDelete(id);
+      
+      // Auto-resolver reportes de los comentarios de la lista y borrarlos
+      const comments = await Comment.find({ list: id });
+      const commentIds = comments.map(c => c._id);
+      
+      await Comment.deleteMany({ list: id });
+
+      // Auditoría
+      await AuditLog.create({
+        adminId: req.user._id,
+        action: 'delete_content',
+        targetId: id,
+        targetType: 'GameList',
+        changes: { title: list.title },
+      });
+
+      // Auto-resolver reportes de la lista
+      await Report.updateMany(
+        { targetId: id, targetType: 'GameList', status: 'pending' },
+        { 
+          $set: { 
+            status: 'resolved', 
+            resolution: 'Contenido eliminado por un administrador.', 
+            resolvedBy: req.user._id, 
+            resolvedAt: new Date() 
+          } 
+        }
+      );
+
+      if (commentIds.length > 0) {
+        await Report.updateMany(
+          { targetId: { $in: commentIds }, targetType: 'Comment', status: 'pending' },
+          { 
+            $set: { 
+              status: 'resolved', 
+              resolution: 'La lista padre fue eliminada por un administrador.', 
+              resolvedBy: req.user._id, 
+              resolvedAt: new Date() 
+            } 
+          }
+        );
+      }
+    } else if (type === 'comment') {
+      const comment = await Comment.findById(id);
+      if (!comment) return res.status(404).json({ error: 'Comentario no encontrado' });
+      await Comment.findByIdAndDelete(id);
+
+      // Auditoría
+      await AuditLog.create({
+        adminId: req.user._id,
+        action: 'delete_content',
+        targetId: id,
+        targetType: 'Comment',
+        changes: { content: comment.content },
+      });
+
+      // Auto-resolver reportes del comentario
+      await Report.updateMany(
+        { targetId: id, targetType: 'Comment', status: 'pending' },
+        { 
+          $set: { 
+            status: 'resolved', 
+            resolution: 'Contenido eliminado por un administrador.', 
+            resolvedBy: req.user._id, 
+            resolvedAt: new Date() 
+          } 
+        }
+      );
+    } else {
+      return res.status(400).json({ error: 'Tipo de contenido inválido' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error eliminando contenido:', error);
     res.status(500).json({ error: error.message });
   }
 });
