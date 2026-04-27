@@ -276,16 +276,29 @@ router.put('/reports/:id', verifyToken, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Estado inválido' });
     }
 
-    const report = await Report.findByIdAndUpdate(
-      req.params.id,
-      {
-        status,
-        resolution,
-        resolvedBy: req.user._id,
-        resolvedAt: status !== 'pending' ? new Date() : null,
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Reporte no encontrado' });
+
+    // Actualiza este reporte y todos los reportes pendientes para el mismo contenido
+    await Report.updateMany(
+      { 
+        targetId: report.targetId, 
+        targetType: report.targetType, 
+        status: 'pending' 
       },
-      { new: true }
-    ).populate('reportedBy', 'username').populate('resolvedBy', 'username');
+      {
+        $set: {
+          status,
+          resolution,
+          resolvedBy: req.user._id,
+          resolvedAt: status !== 'pending' ? new Date() : null,
+        }
+      }
+    );
+
+    const updatedReport = await Report.findById(req.params.id)
+      .populate('reportedBy', 'username')
+      .populate('resolvedBy', 'username');
 
     // Registrar en auditoría
     await AuditLog.create({
@@ -293,10 +306,10 @@ router.put('/reports/:id', verifyToken, requireAdmin, async (req, res) => {
       action: 'resolve_report',
       targetId: report._id,
       targetType: 'Report',
-      changes: { status, resolution },
+      changes: { status, resolution, appliedToMultiple: true },
     });
 
-    res.json({ success: true, report });
+    res.json({ success: true, report: updatedReport });
   } catch (error) {
     console.error('Error resolviendo reporte:', error);
     res.status(500).json({ error: error.message });
