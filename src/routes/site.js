@@ -2,6 +2,7 @@ import { Router } from "express";
 import User from "../models/User.js";
 import GameList from "../models/GameList.js";
 import GameCache from "../models/GameCache.js";
+import GamingSession from "../models/GamingSession.js";
 
 const router = Router();
 
@@ -11,12 +12,12 @@ router.get("/stats", async (req, res) => {
   try {
     const usersCount = await User.countDocuments();
     const listsCount = await GameList.countDocuments();
-    const gamesCached = await GameCache.countDocuments();
+    const sessionsOrganized = await GamingSession.countDocuments();
 
     res.json({
       usersCount,
       listsCount,
-      gamesCached,
+      sessionsOrganized,
     });
   } catch (error) {
     console.error("Site stats error:", error);
