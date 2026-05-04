@@ -974,6 +974,7 @@ router.get("/recent/:steamId", async (req, res) => {
       name: game.name,
       playtime2Weeks: game.playtime_2weeks,
       playtimeForever: game.playtime_forever,
+      lastPlayed: game.rtime_last_played,
       icon: `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_icon_url}.jpg`,
     }));
 
@@ -1010,6 +1011,7 @@ router.get("/me/recent", verifyToken, async (req, res) => {
       name: game.name,
       playtime2Weeks: game.playtime_2weeks,
       playtimeForever: game.playtime_forever,
+      lastPlayed: game.rtime_last_played,
       icon: `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_icon_url}.jpg`,
     }));
 
