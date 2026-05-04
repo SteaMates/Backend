@@ -19,6 +19,7 @@ import marketRoutes from "./routes/market.js";
 // NUEVO
 import sessionsRoutes from "./routes/sessions.js";
 import notificationsRoutes from "./routes/notifications.js";
+import siteRoutes from "./routes/site.js";
 
 // Swagger
 import swaggerUi from "swagger-ui-express";
@@ -91,6 +92,7 @@ app.use("/api/market", marketRoutes);
 // NUEVO
 app.use("/api/sessions", sessionsRoutes);
 app.use("/api/notifications", notificationsRoutes);
+app.use("/api/site", siteRoutes);
 
 // Swagger Documentation Route
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
