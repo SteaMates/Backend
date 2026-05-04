@@ -272,11 +272,11 @@ router.get("/profile-background/:steamId", async (req, res) => {
     const bg = data.response?.profile_background;
 
     if (!bg?.image_large || !bg?.appid) {
-      return res.json({ backgroundUrl: null });
+      return res.json({ backgroundUrl: null, debug: data.response });
     }
 
     const backgroundUrl = `https://cdn.akamai.steamstatic.com/steamcommunity/public/images/items/${bg.appid}/${bg.image_large}`;
-    return res.json({ backgroundUrl });
+    return res.json({ backgroundUrl, debug: bg });
   } catch (error) {
     console.error("Profile background error:", error);
     res.json({ backgroundUrl: null });
