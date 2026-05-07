@@ -26,6 +26,7 @@
     "passport-steam": "^1.0.18",
     "swagger-autogen": "^2.23.7",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "exceljs": "^4.3.0"
   }
 }

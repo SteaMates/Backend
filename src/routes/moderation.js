@@ -1,24 +1,25 @@
-import { Router } from 'express';
-import { verifyToken } from '../middleware/auth.js';
-import { requireAdmin } from '../middleware/adminAuth.js';
-import Report from '../models/Report.js';
-import ModerationAction from '../models/ModerationAction.js';
-import AuditLog from '../models/AuditLog.js';
-import User from '../models/User.js';
-import GameList from '../models/GameList.js';
-import Comment from '../models/Comment.js';
+import { Router } from "express";
+import { verifyToken } from "../middleware/auth.js";
+import { requireAdmin } from "../middleware/adminAuth.js";
+import Report from "../models/Report.js";
+import ModerationAction from "../models/ModerationAction.js";
+import AuditLog from "../models/AuditLog.js";
+import User from "../models/User.js";
+import GameList from "../models/GameList.js";
+import Comment from "../models/Comment.js";
+import ExcelJS from "exceljs";
 
 const router = Router();
 
 // Prioridad al calcular el estado final cuando hay varias sanciones activas.
-const MODERATION_STATUS_PRIORITY = ['banned', 'silenced', 'warned'];
+const MODERATION_STATUS_PRIORITY = ["banned", "silenced", "warned"];
 
 // Convierte el tipo de acción de moderación al estado que se refleja en el usuario.
 function mapActionToUserStatus(action) {
-  if (action === 'banned') return 'banned';
-  if (action === 'silenced') return 'silenced';
-  if (action === 'warned') return 'warned';
-  return 'active';
+  if (action === "banned") return "banned";
+  if (action === "silenced") return "silenced";
+  if (action === "warned") return "warned";
+  return "active";
 }
 
 // Recalcula el estado real del usuario en base a sanciones activas y no expiradas.
@@ -36,22 +37,22 @@ async function recalculateUserStatus(userId) {
       $set: {
         isActive: false,
         revokedAt: now,
-        revokeReason: 'expired',
+        revokeReason: "expired",
       },
-      $unset: { revokedBy: '' },
-    }
+      $unset: { revokedBy: "" },
+    },
   );
 
   const activeActions = await ModerationAction.find({
     userId,
     isActive: true,
-    action: { $in: ['warned', 'silenced', 'banned'] },
+    action: { $in: ["warned", "silenced", "banned"] },
     $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
   })
     .sort({ createdAt: -1 })
-    .select('action createdAt');
+    .select("action createdAt");
 
-  let nextStatus = 'active';
+  let nextStatus = "active";
   // Se aplica la sanción de mayor severidad disponible.
   for (const status of MODERATION_STATUS_PRIORITY) {
     if (activeActions.some((item) => item.action === status)) {
@@ -75,11 +76,13 @@ async function expireAllModerationActions() {
   const expiredActions = await ModerationAction.find({
     isActive: true,
     expiresAt: { $ne: null, $lte: now },
-  }).select('userId');
+  }).select("userId");
 
   if (expiredActions.length === 0) return;
 
-  const userIds = [...new Set(expiredActions.map((action) => action.userId.toString()))];
+  const userIds = [
+    ...new Set(expiredActions.map((action) => action.userId.toString())),
+  ];
 
   await ModerationAction.updateMany(
     {
@@ -90,10 +93,10 @@ async function expireAllModerationActions() {
       $set: {
         isActive: false,
         revokedAt: now,
-        revokeReason: 'expired',
+        revokeReason: "expired",
       },
-      $unset: { revokedBy: '' },
-    }
+      $unset: { revokedBy: "" },
+    },
   );
 
   for (const userId of userIds) {
@@ -104,12 +107,16 @@ async function expireAllModerationActions() {
 // ========== REPORTS ==========
 
 // POST /api/moderation/reports - Crear un reporte
-router.post('/reports', verifyToken, async (req, res) => {
+router.post("/reports", verifyToken, async (req, res) => {
   try {
     const { type, targetId, targetType, reason, description } = req.body;
 
     if (!type || !targetId || !targetType || !reason) {
-      return res.status(400).json({ error: 'Campos requeridos: type, targetId, targetType, reason' });
+      return res
+        .status(400)
+        .json({
+          error: "Campos requeridos: type, targetId, targetType, reason",
+        });
     }
 
     const existing = await Report.findOne({
@@ -119,7 +126,7 @@ router.post('/reports', verifyToken, async (req, res) => {
     }).lean();
 
     if (existing) {
-      return res.status(409).json({ error: 'Ya reportaste este contenido' });
+      return res.status(409).json({ error: "Ya reportaste este contenido" });
     }
 
     const report = new Report({
@@ -130,22 +137,22 @@ router.post('/reports', verifyToken, async (req, res) => {
       reportedBy: req.user._id,
       reason,
       description,
-      status: 'pending',
+      status: "pending",
     });
 
     await report.save();
     res.status(201).json({ success: true, report });
   } catch (error) {
     if (error?.code === 11000) {
-      return res.status(409).json({ error: 'Ya reportaste este contenido' });
+      return res.status(409).json({ error: "Ya reportaste este contenido" });
     }
-    console.error('Error creando reporte:', error);
+    console.error("Error creando reporte:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // GET /api/moderation/reports - Listar reportes (admin only)
-router.get('/reports', verifyToken, requireAdmin, async (req, res) => {
+router.get("/reports", verifyToken, requireAdmin, async (req, res) => {
   try {
     const { status, type, page = 1, limit = 20 } = req.query;
     const filter = {};
@@ -155,9 +162,9 @@ router.get('/reports', verifyToken, requireAdmin, async (req, res) => {
 
     const skip = (page - 1) * limit;
     const reports = await Report.find(filter)
-      .populate('reportedBy', 'username avatar')
-      .populate('resolvedBy', 'username')
-      .populate('targetId')
+      .populate("reportedBy", "username avatar")
+      .populate("resolvedBy", "username")
+      .populate("targetId")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -174,144 +181,305 @@ router.get('/reports', verifyToken, requireAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error listando reportes:', error);
+    console.error("Error listando reportes:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // DELETE /api/moderation/content/:type/:id - Eliminar contenido reportado (admin only)
-router.delete('/content/:type/:id', verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const { type, id } = req.params;
+router.delete(
+  "/content/:type/:id",
+  verifyToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { type, id } = req.params;
 
-    if (type === 'list') {
-      const list = await GameList.findById(id);
-      if (!list) return res.status(404).json({ error: 'Lista no encontrada' });
-      await GameList.findByIdAndDelete(id);
-      
-      // Auto-resolver reportes de los comentarios de la lista y borrarlos
-      const comments = await Comment.find({ list: id });
-      const commentIds = comments.map(c => c._id);
-      
-      await Comment.deleteMany({ list: id });
+      if (type === "list") {
+        const list = await GameList.findById(id);
+        if (!list)
+          return res.status(404).json({ error: "Lista no encontrada" });
+        await GameList.findByIdAndDelete(id);
 
-      // Auditoría
-      await AuditLog.create({
-        adminId: req.user._id,
-        action: 'delete_content',
-        targetId: id,
-        targetType: 'GameList',
-        changes: { title: list.title },
-      });
+        // Auto-resolver reportes de los comentarios de la lista y borrarlos
+        const comments = await Comment.find({ list: id });
+        const commentIds = comments.map((c) => c._id);
 
-      // Auto-resolver reportes de la lista
-      await Report.updateMany(
-        { targetId: id, targetType: 'GameList', status: 'pending' },
-        { 
-          $set: { 
-            status: 'resolved', 
-            resolution: 'Contenido eliminado por un administrador.', 
-            resolvedBy: req.user._id, 
-            resolvedAt: new Date() 
-          } 
-        }
-      );
+        await Comment.deleteMany({ list: id });
 
-      if (commentIds.length > 0) {
+        // Auditoría
+        await AuditLog.create({
+          adminId: req.user._id,
+          action: "delete_content",
+          targetId: id,
+          targetType: "GameList",
+          changes: { title: list.title },
+        });
+
+        // Auto-resolver reportes de la lista
         await Report.updateMany(
-          { targetId: { $in: commentIds }, targetType: 'Comment', status: 'pending' },
-          { 
-            $set: { 
-              status: 'resolved', 
-              resolution: 'La lista padre fue eliminada por un administrador.', 
-              resolvedBy: req.user._id, 
-              resolvedAt: new Date() 
-            } 
-          }
+          { targetId: id, targetType: "GameList", status: "pending" },
+          {
+            $set: {
+              status: "resolved",
+              resolution: "Contenido eliminado por un administrador.",
+              resolvedBy: req.user._id,
+              resolvedAt: new Date(),
+            },
+          },
         );
-      }
-    } else if (type === 'comment') {
-      const comment = await Comment.findById(id);
-      if (!comment) return res.status(404).json({ error: 'Comentario no encontrado' });
-      await Comment.findByIdAndDelete(id);
 
-      // Auditoría
-      await AuditLog.create({
-        adminId: req.user._id,
-        action: 'delete_content',
-        targetId: id,
-        targetType: 'Comment',
-        changes: { content: comment.content },
-      });
-
-      // Auto-resolver reportes del comentario
-      await Report.updateMany(
-        { targetId: id, targetType: 'Comment', status: 'pending' },
-        { 
-          $set: { 
-            status: 'resolved', 
-            resolution: 'Contenido eliminado por un administrador.', 
-            resolvedBy: req.user._id, 
-            resolvedAt: new Date() 
-          } 
+        if (commentIds.length > 0) {
+          await Report.updateMany(
+            {
+              targetId: { $in: commentIds },
+              targetType: "Comment",
+              status: "pending",
+            },
+            {
+              $set: {
+                status: "resolved",
+                resolution:
+                  "La lista padre fue eliminada por un administrador.",
+                resolvedBy: req.user._id,
+                resolvedAt: new Date(),
+              },
+            },
+          );
         }
-      );
-    } else {
-      return res.status(400).json({ error: 'Tipo de contenido inválido' });
-    }
+      } else if (type === "comment") {
+        const comment = await Comment.findById(id);
+        if (!comment)
+          return res.status(404).json({ error: "Comentario no encontrado" });
+        await Comment.findByIdAndDelete(id);
 
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error eliminando contenido:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+        // Auditoría
+        await AuditLog.create({
+          adminId: req.user._id,
+          action: "delete_content",
+          targetId: id,
+          targetType: "Comment",
+          changes: { content: comment.content },
+        });
+
+        // Auto-resolver reportes del comentario
+        await Report.updateMany(
+          { targetId: id, targetType: "Comment", status: "pending" },
+          {
+            $set: {
+              status: "resolved",
+              resolution: "Contenido eliminado por un administrador.",
+              resolvedBy: req.user._id,
+              resolvedAt: new Date(),
+            },
+          },
+        );
+      } else {
+        return res.status(400).json({ error: "Tipo de contenido inválido" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error eliminando contenido:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
 
 // PUT /api/moderation/reports/:id - Resolver reporte (admin only)
-router.put('/reports/:id', verifyToken, requireAdmin, async (req, res) => {
+router.put("/reports/:id", verifyToken, requireAdmin, async (req, res) => {
   try {
     const { status, resolution } = req.body;
 
-    if (!['pending', 'resolved', 'dismissed'].includes(status)) {
-      return res.status(400).json({ error: 'Estado inválido' });
+    if (!["pending", "resolved", "dismissed"].includes(status)) {
+      return res.status(400).json({ error: "Estado inválido" });
     }
 
     const report = await Report.findById(req.params.id);
-    if (!report) return res.status(404).json({ error: 'Reporte no encontrado' });
+    if (!report)
+      return res.status(404).json({ error: "Reporte no encontrado" });
 
     // Actualiza este reporte y todos los reportes pendientes para el mismo contenido
     await Report.updateMany(
-      { 
-        targetId: report.targetId, 
-        targetType: report.targetType, 
-        status: 'pending' 
+      {
+        targetId: report.targetId,
+        targetType: report.targetType,
+        status: "pending",
       },
       {
         $set: {
           status,
           resolution,
           resolvedBy: req.user._id,
-          resolvedAt: status !== 'pending' ? new Date() : null,
-        }
-      }
+          resolvedAt: status !== "pending" ? new Date() : null,
+        },
+      },
     );
 
     const updatedReport = await Report.findById(req.params.id)
-      .populate('reportedBy', 'username')
-      .populate('resolvedBy', 'username');
+      .populate("reportedBy", "username")
+      .populate("resolvedBy", "username");
 
     // Registrar en auditoría
     await AuditLog.create({
       adminId: req.user._id,
-      action: 'resolve_report',
+      action: "resolve_report",
       targetId: report._id,
-      targetType: 'Report',
+      targetType: "Report",
       changes: { status, resolution, appliedToMultiple: true },
     });
 
     res.json({ success: true, report: updatedReport });
   } catch (error) {
-    console.error('Error resolviendo reporte:', error);
+    console.error("Error resolviendo reporte:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/moderation/export?type=users|reports|actions&format=csv|xlsx - Export data (admin only)
+router.get("/export", verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { type = "users", format = "csv" } = req.query;
+
+    let headers = [];
+    let rows = [];
+
+    if (type === "users") {
+      const users = await User.find().lean();
+      headers = [
+        "steamId",
+        "username",
+        "realName",
+        "role",
+        "status",
+        "createdAt",
+        "lastLogin",
+        "wishlistCount",
+        "priceAlertsCount",
+      ];
+      rows = users.map((u) => [
+        u.steamId,
+        u.username,
+        u.realName || "",
+        u.role || "",
+        u.status || "",
+        u.createdAt ? new Date(u.createdAt).toISOString() : "",
+        u.lastLogin ? new Date(u.lastLogin).toISOString() : "",
+        Array.isArray(u.wishlist) ? u.wishlist.length : 0,
+        Array.isArray(u.priceAlerts) ? u.priceAlerts.length : 0,
+      ]);
+    } else if (type === "reports") {
+      const reports = await Report.find()
+        .populate("reportedBy", "username")
+        .populate("resolvedBy", "username")
+        .lean();
+      headers = [
+        "id",
+        "type",
+        "targetType",
+        "targetId",
+        "reporter",
+        "reportedBy",
+        "reason",
+        "description",
+        "status",
+        "createdAt",
+        "resolvedAt",
+        "resolvedBy",
+      ];
+      rows = reports.map((r) => [
+        r._id?.toString(),
+        r.type || "",
+        r.targetType || "",
+        r.targetId
+          ? typeof r.targetId === "object"
+            ? (r.targetId._id || "").toString()
+            : String(r.targetId)
+          : "",
+        r.reporterId ? String(r.reporterId) : "",
+        r.reportedBy?.username || "",
+        r.reason || "",
+        (r.description || "").replace(/\r?\n/g, " "),
+        r.status || "",
+        r.createdAt ? new Date(r.createdAt).toISOString() : "",
+        r.resolvedAt ? new Date(r.resolvedAt).toISOString() : "",
+        r.resolvedBy?.username || "",
+      ]);
+    } else if (type === "actions") {
+      const actions = await ModerationAction.find()
+        .populate("userId", "steamId username")
+        .populate("revokedBy", "username")
+        .lean();
+      headers = [
+        "id",
+        "userSteamId",
+        "username",
+        "action",
+        "reason",
+        "isActive",
+        "createdAt",
+        "expiresAt",
+        "revokedAt",
+        "revokedBy",
+      ];
+      rows = actions.map((a) => [
+        a._id?.toString(),
+        a.userId?.steamId || "",
+        a.userId?.username || "",
+        a.action || "",
+        (a.reason || "").replace(/\r?\n/g, " "),
+        a.isActive ? "true" : "false",
+        a.createdAt ? new Date(a.createdAt).toISOString() : "",
+        a.expiresAt ? new Date(a.expiresAt).toISOString() : "",
+        a.revokedAt ? new Date(a.revokedAt).toISOString() : "",
+        a.revokedBy?.username || "",
+      ]);
+    } else {
+      return res.status(400).json({ error: "Tipo de exportación inválido" });
+    }
+
+    const filenameBase = `${type}-export-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}`;
+
+    if (format === "xlsx") {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Export");
+      sheet.addRow(headers);
+      rows.forEach((r) => sheet.addRow(r));
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filenameBase}.xlsx"`,
+      );
+      await workbook.xlsx.write(res);
+      res.end();
+      return;
+    }
+
+    // Default: CSV
+    const escapeCsv = (v) => {
+      if (v === null || v === undefined) return "";
+      const s = String(v);
+      if (s.includes(",") || s.includes("\n") || s.includes('"')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    };
+
+    const csvLines = [headers.map(escapeCsv).join(",")].concat(
+      rows.map((r) => r.map(escapeCsv).join(",")),
+    );
+    const csv = csvLines.join("\n");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filenameBase}.csv"`,
+    );
+    res.send(csv);
+  } catch (error) {
+    console.error("Error exporting data:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -319,19 +487,22 @@ router.put('/reports/:id', verifyToken, requireAdmin, async (req, res) => {
 // ========== MODERATION ACTIONS ==========
 
 // POST /api/moderation/actions - Aplicar sanción a usuario (admin only)
-router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
+router.post("/actions", verifyToken, requireAdmin, async (req, res) => {
   try {
     const { userId, action, reason, duration } = req.body;
 
-    if (!['warned', 'silenced', 'banned', 'suspended'].includes(action)) {
-      return res.status(400).json({ error: 'Acción de moderación inválida' });
+    if (!["warned", "silenced", "banned", "suspended"].includes(action)) {
+      return res.status(400).json({ error: "Acción de moderación inválida" });
     }
 
-    const hasDuration = duration !== undefined && duration !== null && duration !== '';
+    const hasDuration =
+      duration !== undefined && duration !== null && duration !== "";
     const parsedDuration = hasDuration ? Number(duration) : null;
-    if ((action === 'silenced' || action === 'banned') && hasDuration) {
+    if ((action === "silenced" || action === "banned") && hasDuration) {
       if (!Number.isInteger(parsedDuration) || parsedDuration <= 0) {
-        return res.status(400).json({ error: 'La duración debe ser un número entero mayor que 0' });
+        return res
+          .status(400)
+          .json({ error: "La duración debe ser un número entero mayor que 0" });
       }
     }
 
@@ -340,7 +511,7 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
+      return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
     const now = new Date();
@@ -352,7 +523,7 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
     });
 
     // Toggle: si la sanción ya está activa, el mismo botón la revierte.
-    if (mapActionToUserStatus(action) !== 'active' && hasActiveSameAction) {
+    if (mapActionToUserStatus(action) !== "active" && hasActiveSameAction) {
       const toggleOffReason = reason?.trim() || `manual_unset_${action}`;
       await ModerationAction.updateMany(
         {
@@ -367,7 +538,7 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
             revokedBy: req.user._id,
             revokeReason: toggleOffReason,
           },
-        }
+        },
       );
 
       // Recalcula por si había otras sanciones activas (ej: warned + silenced).
@@ -375,9 +546,9 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
 
       await AuditLog.create({
         adminId: req.user._id,
-        action: 'remove_moderation',
+        action: "remove_moderation",
         targetId: userId,
-        targetType: 'User',
+        targetType: "User",
         changes: { action, reason: toggleOffReason, userStatus: newStatus },
       });
 
@@ -389,7 +560,9 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
     }
 
     if (!reason || !reason.trim()) {
-      return res.status(400).json({ error: 'El motivo es obligatorio para aplicar la sanción' });
+      return res
+        .status(400)
+        .json({ error: "El motivo es obligatorio para aplicar la sanción" });
     }
 
     // Calcular expiración si tiene duración
@@ -407,9 +580,9 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
           isActive: false,
           revokedAt: new Date(),
           revokedBy: req.user._id,
-          revokeReason: 'replaced_by_new_action',
+          revokeReason: "replaced_by_new_action",
         },
-      }
+      },
     );
 
     // Crear acción de moderación
@@ -432,33 +605,33 @@ router.post('/actions', verifyToken, requireAdmin, async (req, res) => {
 
     await AuditLog.create({
       adminId: req.user._id,
-      action: 'apply_moderation',
+      action: "apply_moderation",
       targetId: userId,
-      targetType: 'User',
+      targetType: "User",
       changes: { action, reason, duration, userStatus: newStatus },
     });
 
     res.status(201).json({ success: true, modAction, userStatus: newStatus });
   } catch (error) {
-    console.error('Error aplicando sanción:', error);
+    console.error("Error aplicando sanción:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // GET /api/moderation/user/:userId - Historial de moderación
-router.get('/user/:userId', verifyToken, requireAdmin, async (req, res) => {
+router.get("/user/:userId", verifyToken, requireAdmin, async (req, res) => {
   try {
     // El historial se devuelve con el estado ya sincronizado tras posibles expiraciones.
     await recalculateUserStatus(req.params.userId);
 
     const actions = await ModerationAction.find({ userId: req.params.userId })
-      .populate('appliedBy', 'username')
-      .populate('revokedBy', 'username')
+      .populate("appliedBy", "username")
+      .populate("revokedBy", "username")
       .sort({ createdAt: -1 });
 
     res.json({ actions });
   } catch (error) {
-    console.error('Error obteniendo historial:', error);
+    console.error("Error obteniendo historial:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -466,7 +639,7 @@ router.get('/user/:userId', verifyToken, requireAdmin, async (req, res) => {
 // ========== AUDIT LOG ==========
 
 // GET /api/moderation/audit-log - Registro de auditoría (admin only)
-router.get('/audit-log', verifyToken, requireAdmin, async (req, res) => {
+router.get("/audit-log", verifyToken, requireAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 50, adminId } = req.query;
     const filter = {};
@@ -475,7 +648,7 @@ router.get('/audit-log', verifyToken, requireAdmin, async (req, res) => {
 
     const skip = (page - 1) * limit;
     const logs = await AuditLog.find(filter)
-      .populate('adminId', 'username')
+      .populate("adminId", "username")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -492,7 +665,7 @@ router.get('/audit-log', verifyToken, requireAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error obteniendo audit log:', error);
+    console.error("Error obteniendo audit log:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -500,7 +673,7 @@ router.get('/audit-log', verifyToken, requireAdmin, async (req, res) => {
 // ========== USERS ==========
 
 // GET /api/moderation/users - Listar usuarios con estado de moderación (admin only)
-router.get('/users', verifyToken, requireAdmin, async (req, res) => {
+router.get("/users", verifyToken, requireAdmin, async (req, res) => {
   try {
     // Antes de listar, se procesan vencimientos para que el panel vea datos reales.
     await expireAllModerationActions();
@@ -511,15 +684,17 @@ router.get('/users', verifyToken, requireAdmin, async (req, res) => {
     if (status) filter.status = status;
     if (search) {
       filter.$or = [
-        { username: { $regex: search, $options: 'i' } },
-        { steamId: { $regex: search, $options: 'i' } },
+        { username: { $regex: search, $options: "i" } },
+        { steamId: { $regex: search, $options: "i" } },
       ];
     }
 
     const skip = (page - 1) * limit;
     const users = await User.find(filter)
-      .select('username steamId avatar status moderationHistory createdAt lastLogin')
-      .populate('moderationHistory')
+      .select(
+        "username steamId avatar status moderationHistory createdAt lastLogin",
+      )
+      .populate("moderationHistory")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -536,7 +711,7 @@ router.get('/users', verifyToken, requireAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error listando usuarios:', error);
+    console.error("Error listando usuarios:", error);
     res.status(500).json({ error: error.message });
   }
 });
