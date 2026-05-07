@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
 
     const hasPagination = page !== undefined || limit !== undefined;
     const pageNumber = Math.max(parseInt(page || '1', 10) || 1, 1);
-    const pageSize = Math.max(parseInt(limit || '12', 10) || 12, 1);
+    const pageSize = Math.max(parseInt(limit || '3', 10) || 3, 1);
     const skip = (pageNumber - 1) * pageSize;
 
     const query = GameList.find()
@@ -135,7 +135,7 @@ router.get('/:id/comments', async (req, res) => {
     const { page, limit } = req.query;
     const hasPagination = page !== undefined || limit !== undefined;
     const pageNumber = Math.max(parseInt(page || '1', 10) || 1, 1);
-    const pageSize = Math.max(parseInt(limit || '10', 10) || 10, 1);
+    const pageSize = Math.max(parseInt(limit || '3', 10) || 3, 1);
     const skip = (pageNumber - 1) * pageSize;
 
     const query = Comment.find({ list: req.params.id })
