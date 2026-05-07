@@ -44,13 +44,13 @@ router.get('/', async (req, res) => {
 
     const hasPagination = page !== undefined || limit !== undefined;
     const pageNumber = Math.max(parseInt(page || '1', 10) || 1, 1);
-    const pageSize = Math.max(parseInt(limit || '3', 10) || 3, 1);
+    const pageSize = Math.max(parseInt(limit || '12', 10) || 12, 1);
     const skip = (pageNumber - 1) * pageSize;
 
     const query = GameList.find()
       .populate('author', 'username avatar steamId')
       .lean()
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1, _id: -1 });
 
     const lists = hasPagination
       ? await query.skip(skip).limit(pageSize)
@@ -135,12 +135,12 @@ router.get('/:id/comments', async (req, res) => {
     const { page, limit } = req.query;
     const hasPagination = page !== undefined || limit !== undefined;
     const pageNumber = Math.max(parseInt(page || '1', 10) || 1, 1);
-    const pageSize = Math.max(parseInt(limit || '3', 10) || 3, 1);
+    const pageSize = Math.max(parseInt(limit || '12', 10) || 12, 1);
     const skip = (pageNumber - 1) * pageSize;
 
     const query = Comment.find({ list: req.params.id })
       .populate('author', 'username avatar steamId')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1, _id: -1 });
 
     const comments = hasPagination
       ? await query.skip(skip).limit(pageSize)

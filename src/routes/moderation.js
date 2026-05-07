@@ -147,7 +147,7 @@ router.post('/reports', verifyToken, async (req, res) => {
 // GET /api/moderation/reports - Listar reportes (admin only)
 router.get('/reports', verifyToken, requireAdmin, async (req, res) => {
   try {
-    const { status, type, page = 1, limit = 3, search } = req.query;
+    const { status, type, page = 1, limit = 12, search } = req.query;
     const filter = {};
 
     if (status) filter.status = status;
@@ -166,7 +166,7 @@ router.get('/reports', verifyToken, requireAdmin, async (req, res) => {
       .populate('reportedBy', 'username avatar')
       .populate('resolvedBy', 'username')
       .populate('targetId')
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(pageSize);
 
@@ -553,7 +553,7 @@ router.get('/users', verifyToken, requireAdmin, async (req, res) => {
     // Antes de listar, se procesan vencimientos para que el panel vea datos reales.
     await expireAllModerationActions();
 
-    const { status, page = 1, limit = 3, search } = req.query;
+    const { status, page = 1, limit = 12, search } = req.query;
     const filter = {};
 
     if (status) filter.status = status;
@@ -568,7 +568,7 @@ router.get('/users', verifyToken, requireAdmin, async (req, res) => {
     const users = await User.find(filter)
       .select('username steamId avatar status moderationHistory createdAt lastLogin')
       .populate('moderationHistory')
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
