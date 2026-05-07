@@ -40,18 +40,43 @@ router.post('/', verifyToken, requireCanPublish, async (req, res) => {
 // GET /api/lists - Get all lists (with author populated)
 router.get('/', async (req, res) => {
   try {
-    const lists = await GameList.find()
+    const { page, limit } = req.query;
+
+    const hasPagination = page !== undefined || limit !== undefined;
+    const pageNumber = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const pageSize = Math.max(parseInt(limit || '12', 10) || 12, 1);
+    const skip = (pageNumber - 1) * pageSize;
+
+    const query = GameList.find()
       .populate('author', 'username avatar steamId')
       .lean()
       .sort({ createdAt: -1 });
-      
+
+    const lists = hasPagination
+      ? await query.skip(skip).limit(pageSize)
+      : await query;
+
     // Attach comment counts
     const listsWithComments = await Promise.all(lists.map(async (list) => {
       const count = await Comment.countDocuments({ list: list._id });
       return { ...list, commentsCount: count };
     }));
-      
-    res.json(listsWithComments);
+
+    if (!hasPagination) {
+      return res.json(listsWithComments);
+    }
+
+    const total = await GameList.countDocuments();
+
+    res.json({
+      lists: listsWithComments,
+      pagination: {
+        page: pageNumber,
+        limit: pageSize,
+        total,
+        pages: Math.ceil(total / pageSize),
+      },
+    });
   } catch (error) {
     console.error('Error fetching lists:', error);
     res.status(500).json({ error: 'Failed to fetch game lists' });
@@ -107,10 +132,35 @@ router.delete('/:id', verifyToken, async (req, res) => {
 // GET /api/lists/:id/comments
 router.get('/:id/comments', async (req, res) => {
   try {
-    const comments = await Comment.find({ list: req.params.id })
+    const { page, limit } = req.query;
+    const hasPagination = page !== undefined || limit !== undefined;
+    const pageNumber = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const pageSize = Math.max(parseInt(limit || '10', 10) || 10, 1);
+    const skip = (pageNumber - 1) * pageSize;
+
+    const query = Comment.find({ list: req.params.id })
       .populate('author', 'username avatar steamId')
       .sort({ createdAt: -1 });
-    res.json(comments);
+
+    const comments = hasPagination
+      ? await query.skip(skip).limit(pageSize)
+      : await query;
+
+    if (!hasPagination) {
+      return res.json(comments);
+    }
+
+    const total = await Comment.countDocuments({ list: req.params.id });
+
+    res.json({
+      comments,
+      pagination: {
+        page: pageNumber,
+        limit: pageSize,
+        total,
+        pages: Math.ceil(total / pageSize),
+      },
+    });
   } catch (error) {
     console.error('Error fetching comments:', error);
     res.status(500).json({ error: 'Failed to fetch comments' });

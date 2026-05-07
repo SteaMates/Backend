@@ -147,35 +147,83 @@ router.post('/reports', verifyToken, async (req, res) => {
 // GET /api/moderation/reports - Listar reportes (admin only)
 router.get('/reports', verifyToken, requireAdmin, async (req, res) => {
   try {
-    const { status, type, page = 1, limit = 20 } = req.query;
+    const { status, type, page = 1, limit = 20, search } = req.query;
     const filter = {};
 
     if (status) filter.status = status;
     if (type) filter.type = type;
+    if (search) {
+      filter.$or = [
+        { reason: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+      ];
+    }
 
-    const skip = (page - 1) * limit;
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const pageSize = Math.max(parseInt(limit, 10) || 20, 1);
+    const skip = (pageNumber - 1) * pageSize;
     const reports = await Report.find(filter)
       .populate('reportedBy', 'username avatar')
       .populate('resolvedBy', 'username')
       .populate('targetId')
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(pageSize);
 
     const total = await Report.countDocuments(filter);
 
     res.json({
       reports,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: pageNumber,
+        limit: pageSize,
         total,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil(total / pageSize),
       },
     });
   } catch (error) {
     console.error('Error listando reportes:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/moderation/stats - Resumen global del panel de moderación (admin only)
+router.get('/stats', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const [pendingReports, resolvedReports, dismissedReports, activeUsers, warnedUsers, silencedUsers, bannedUsers, deletedContent] = await Promise.all([
+      Report.countDocuments({ status: 'pending' }).catch(() => 0),
+      Report.countDocuments({ status: 'resolved' }).catch(() => 0),
+      Report.countDocuments({ status: 'dismissed' }).catch(() => 0),
+      User.countDocuments({ status: 'active' }).catch(() => 0),
+      User.countDocuments({ status: 'warned' }).catch(() => 0),
+      User.countDocuments({ status: 'silenced' }).catch(() => 0),
+      User.countDocuments({ status: 'banned' }).catch(() => 0),
+      AuditLog.countDocuments({ action: 'delete_content' }).catch(() => 0),
+    ]);
+
+    res.json({
+      pending: pendingReports,
+      resolved: resolvedReports,
+      dismissed: dismissedReports,
+      deleted: deletedContent,
+      warned: warnedUsers,
+      active: activeUsers,
+      silenced: silencedUsers,
+      banned: bannedUsers,
+    });
+  } catch (error) {
+    console.error('Error obteniendo estadísticas de moderación:', error);
+    // Return zeros instead of error to prevent admin UI crash
+    res.json({
+      pending: 0,
+      resolved: 0,
+      dismissed: 0,
+      deleted: 0,
+      warned: 0,
+      active: 0,
+      silenced: 0,
+      banned: 0,
+    });
   }
 });
 
