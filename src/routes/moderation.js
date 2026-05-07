@@ -112,11 +112,9 @@ router.post("/reports", verifyToken, async (req, res) => {
     const { type, targetId, targetType, reason, description } = req.body;
 
     if (!type || !targetId || !targetType || !reason) {
-      return res
-        .status(400)
-        .json({
-          error: "Campos requeridos: type, targetId, targetType, reason",
-        });
+      return res.status(400).json({
+        error: "Campos requeridos: type, targetId, targetType, reason",
+      });
     }
 
     const existing = await Report.findOne({
@@ -161,8 +159,8 @@ router.get("/reports", verifyToken, requireAdmin, async (req, res) => {
     if (type) filter.type = type;
     if (search) {
       filter.$or = [
-        { reason: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { reason: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -170,17 +168,10 @@ router.get("/reports", verifyToken, requireAdmin, async (req, res) => {
     const pageSize = Math.max(parseInt(limit, 10) || 20, 1);
     const skip = (pageNumber - 1) * pageSize;
     const reports = await Report.find(filter)
-<<<<<<< HEAD
       .populate("reportedBy", "username avatar")
       .populate("resolvedBy", "username")
       .populate("targetId")
-      .sort({ createdAt: -1 })
-=======
-      .populate('reportedBy', 'username avatar')
-      .populate('resolvedBy', 'username')
-      .populate('targetId')
       .sort({ createdAt: -1, _id: -1 })
->>>>>>> 19d4bf776ceb4c85e651e67663e137ce7e330b9d
       .skip(skip)
       .limit(pageSize);
 
@@ -202,17 +193,26 @@ router.get("/reports", verifyToken, requireAdmin, async (req, res) => {
 });
 
 // GET /api/moderation/stats - Resumen global del panel de moderación (admin only)
-router.get('/stats', verifyToken, requireAdmin, async (req, res) => {
+router.get("/stats", verifyToken, requireAdmin, async (req, res) => {
   try {
-    const [pendingReports, resolvedReports, dismissedReports, activeUsers, warnedUsers, silencedUsers, bannedUsers, deletedContent] = await Promise.all([
-      Report.countDocuments({ status: 'pending' }).catch(() => 0),
-      Report.countDocuments({ status: 'resolved' }).catch(() => 0),
-      Report.countDocuments({ status: 'dismissed' }).catch(() => 0),
-      User.countDocuments({ status: 'active' }).catch(() => 0),
-      User.countDocuments({ status: 'warned' }).catch(() => 0),
-      User.countDocuments({ status: 'silenced' }).catch(() => 0),
-      User.countDocuments({ status: 'banned' }).catch(() => 0),
-      AuditLog.countDocuments({ action: 'delete_content' }).catch(() => 0),
+    const [
+      pendingReports,
+      resolvedReports,
+      dismissedReports,
+      activeUsers,
+      warnedUsers,
+      silencedUsers,
+      bannedUsers,
+      deletedContent,
+    ] = await Promise.all([
+      Report.countDocuments({ status: "pending" }).catch(() => 0),
+      Report.countDocuments({ status: "resolved" }).catch(() => 0),
+      Report.countDocuments({ status: "dismissed" }).catch(() => 0),
+      User.countDocuments({ status: "active" }).catch(() => 0),
+      User.countDocuments({ status: "warned" }).catch(() => 0),
+      User.countDocuments({ status: "silenced" }).catch(() => 0),
+      User.countDocuments({ status: "banned" }).catch(() => 0),
+      AuditLog.countDocuments({ action: "delete_content" }).catch(() => 0),
     ]);
 
     res.json({
@@ -226,7 +226,7 @@ router.get('/stats', verifyToken, requireAdmin, async (req, res) => {
       banned: bannedUsers,
     });
   } catch (error) {
-    console.error('Error obteniendo estadísticas de moderación:', error);
+    console.error("Error obteniendo estadísticas de moderación:", error);
     // Return zeros instead of error to prevent admin UI crash
     res.json({
       pending: 0,
@@ -746,17 +746,11 @@ router.get("/users", verifyToken, requireAdmin, async (req, res) => {
 
     const skip = (page - 1) * limit;
     const users = await User.find(filter)
-<<<<<<< HEAD
       .select(
         "username steamId avatar status moderationHistory createdAt lastLogin",
       )
       .populate("moderationHistory")
-      .sort({ createdAt: -1 })
-=======
-      .select('username steamId avatar status moderationHistory createdAt lastLogin')
-      .populate('moderationHistory')
       .sort({ createdAt: -1, _id: -1 })
->>>>>>> 19d4bf776ceb4c85e651e67663e137ce7e330b9d
       .skip(skip)
       .limit(parseInt(limit));
 
