@@ -15,25 +15,20 @@ jobs:
       - name: 1. Descargar el código fuente
         uses: actions/checkout@v4
 
-      # PASO DE DEPURE: Esto nos dirá si la carpeta es 'backend' o 'Backend'
-      - name: Comprobar estructura de carpetas
-        run: ls -R
-
       - name: 2. Configurar entorno Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          # Ajustado a minúsculas para coincidir con tu carpeta real
-          cache-dependency-path: 'backend/package-lock.json' 
+          # CORRECCIÓN: El archivo está en la raíz, no en una carpeta
+          cache-dependency-path: package-lock.json 
 
       - name: 3. Instalación de dependencias
+        # Eliminamos 'working-directory' porque estamos en la raíz
         run: npm ci
-        working-directory: ./backend
 
       - name: 4. Ejecución de Pruebas y Cobertura (CI)
         run: npm run test:coverage
-        working-directory: ./backend
         env:
           NODE_ENV: test
           SESSION_SECRET: "test_secret"
