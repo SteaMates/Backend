@@ -20,15 +20,16 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          # IMPORTANTE: Asegúrate de que 'Backend' esté escrito igual que en tu repo (mayúsculas/minúsculas)
-          cache-dependency-path: './Backend/package-lock.json'
+          # CORRECCIÓN: Se utiliza minúscula y se pone entre comillas para mayor seguridad
+          cache-dependency-path: 'backend/package-lock.json'
 
       - name: 3. Instalación de dependencias
-        working-directory: ./Backend
+        # Nos aseguramos de entrar en la carpeta antes de instalar
+        working-directory: ./backend
         run: npm ci
 
       - name: 4. Ejecución de Pruebas y Cobertura (CI)
-        working-directory: ./Backend
+        working-directory: ./backend
         run: npm run test:coverage
         env:
           NODE_ENV: test
@@ -40,4 +41,4 @@ jobs:
         if: success() && github.event_name == 'push'
         run: |
           curl -s "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-          echo "Pipeline completado: Tests pasados y despliegue enviado a Render."
+          echo "Pipeline completado con éxito."
