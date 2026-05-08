@@ -30,8 +30,10 @@ const swaggerDocument = require("../swagger-output.json");
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Connect to MongoDB
-await connectDB();
+// Connect to MongoDB (SOLO SI NO ESTAMOS EN TESTS)
+if (process.env.NODE_ENV !== 'test') {
+  await connectDB();
+}
 
 // Middleware
 const allowedOrigins = [
@@ -102,10 +104,16 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `🚀 SteaMates server running on port ${PORT} [${
-      process.env.NODE_ENV || "development"
-    }]`,
-  );
-});
+// SOLO SE INICIA EL SERVIDOR SI NO ESTAMOS PASANDO LOS TESTS
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(
+      `🚀 SteaMates server running on port ${PORT} [${
+        process.env.NODE_ENV || "development"
+      }]`,
+    );
+  });
+}
+
+// EXPORTAMOS LA APP PARA QUE JEST Y SUPERTEST PUEDAN USARLA
+export default app;

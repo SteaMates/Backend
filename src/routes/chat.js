@@ -1,8 +1,8 @@
-import { Router } from 'express';
+import express from "express";
 import Groq from 'groq-sdk';
 import ChatSession from '../models/ChatSession.js';
 
-const router = Router();
+const router = express.Router();
 const STEAM_API_BASE = 'https://api.steampowered.com';
 
 // Base system prompt for the gaming assistant

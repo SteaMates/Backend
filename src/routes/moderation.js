@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express from "express";
 import { verifyToken } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/adminAuth.js";
 import Report from "../models/Report.js";
@@ -9,7 +9,7 @@ import GameList from "../models/GameList.js";
 import Comment from "../models/Comment.js";
 import ExcelJS from "exceljs";
 
-const router = Router();
+const router = express.Router();
 
 // Prioridad al calcular el estado final cuando hay varias sanciones activas.
 const MODERATION_STATUS_PRIORITY = ["banned", "silenced", "warned"];

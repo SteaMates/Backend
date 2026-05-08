@@ -1,8 +1,8 @@
-import { Router } from "express";
+import express from "express";
 import Notification from "../models/Notification.js";
 import { verifyToken } from "../middleware/auth.js";
 
-const router = Router();
+const router = express.Router();
 
 /**
  * GET /api/notifications

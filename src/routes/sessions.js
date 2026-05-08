@@ -1,10 +1,10 @@
-import { Router } from "express";
+import express from "express";
 import GamingSession from "../models/GamingSession.js";
 import Notification from "../models/Notification.js";
 import User from "../models/User.js";
 import { verifyToken } from "../middleware/auth.js";
 
-const router = Router();
+const router = express.Router();
 
 const NOTIFICATION_TTL_DAYS = Number(process.env.NOTIFICATIONS_TTL_DAYS || 30);
 
