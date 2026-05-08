@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express from "express";
 import mongoose from 'mongoose';
 import { verifyToken } from '../middleware/auth.js';
 import Report from '../models/Report.js';
@@ -6,7 +6,7 @@ import GameList from '../models/GameList.js';
 import Comment from '../models/Comment.js';
 import User from '../models/User.js';
 
-const router = Router();
+const router = express.Router();
 
 const TARGET_CONFIG = {
   list: { model: GameList, targetType: 'GameList' },

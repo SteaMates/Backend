@@ -1,10 +1,11 @@
-import { Router } from "express";
+import express from "express";
+
 import { randomUUID } from "crypto";
 import { verifyToken } from "../middleware/auth.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 
-const router = Router();
+const router = express.Router();
 
 const CHEAPSHARK_BASE_URL = "https://www.cheapshark.com/api/1.0";
 const CHEAPSHARK_HEADERS = {

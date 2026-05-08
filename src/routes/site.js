@@ -1,11 +1,10 @@
-import { Router } from "express";
+import express from "express";
 import User from "../models/User.js";
 import GameList from "../models/GameList.js";
 import GameCache from "../models/GameCache.js";
 import GamingSession from "../models/GamingSession.js";
 
-const router = Router();
-
+const router = express.Router();
 // GET /api/site/stats
 // Returns simple global counts for frontend landing/login
 router.get("/stats", async (req, res) => {

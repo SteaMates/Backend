@@ -1,8 +1,8 @@
-import { Router } from "express";
+import express from "express";
 import GameCache from "../models/GameCache.js";
 import { verifyToken } from "../middleware/auth.js";
 
-const router = Router();
+const router = express.Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
 const STORE_API_BASE = "https://store.steampowered.com/api";
 

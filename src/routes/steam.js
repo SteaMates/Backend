@@ -1,10 +1,10 @@
-import { Router } from "express";
+import express from "express";
 import * as cheerio from "cheerio";
 import GameCache from "../models/GameCache.js";
 import { verifyToken } from "../middleware/auth.js";
 import User from "../models/User.js";
 
-const router = Router();
+const router = express.Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
 
 function getItadApiKey() {

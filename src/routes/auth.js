@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import express from "express";
 import passport from 'passport';
 import jwt from 'jsonwebtoken';
 import { verifyToken } from '../middleware/auth.js';
 import ModerationAction from '../models/ModerationAction.js';
 
-const router = Router();
+const router = express.Router();
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 const JWT_SECRET = process.env.SESSION_SECRET || 'steamates-secret-key';
 
