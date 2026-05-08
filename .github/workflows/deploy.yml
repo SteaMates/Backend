@@ -1,32 +1,43 @@
-name: Deploy to Render
+name: CI/CD Pipeline Backend
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
-  deploy:
-    name: Deploy Backend
+  build-test-deploy:
+    name: Compilación, Pruebas y Despliegue
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: 1. Descargar el código fuente
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: 2. Configurar entorno Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          # Ajusta esta ruta si tu package-lock no está en la raíz del repo
+          cache-dependency-path: Backend/package-lock.json 
 
-      - name: Install dependencies
-        run: npm install
+      - name: 3. Instalación de dependencias
+        run: npm ci
+        working-directory: ./Backend
 
-      - name: Health check (basic syntax validation)
-        run: node --check src/index.js
+      - name: 4. Ejecución de Pruebas y Cobertura (CI)
+        run: npm run test:coverage
+        working-directory: ./Backend
+        env:
+          NODE_ENV: test
+          SESSION_SECRET: "test_secret"
+          JWT_SECRET: "test_jwt_secret"
+          CLIENT_URL: "http://localhost:5173"
 
-      - name: Trigger Render Deploy
+      - name: 5. Despliegue en Render (CD)
+        if: success() && github.event_name == 'push'
         run: |
           curl -s "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-          echo "Deploy triggered on Render"
+          echo "Pipeline completado: Tests pasados y despliegue enviado a Render."
