@@ -20,16 +20,16 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          # Ajusta esta ruta si tu package-lock no está en la raíz del repo
-          cache-dependency-path: Backend/package-lock.json 
+          # IMPORTANTE: Asegúrate de que 'Backend' esté escrito igual que en tu repo (mayúsculas/minúsculas)
+          cache-dependency-path: './Backend/package-lock.json'
 
       - name: 3. Instalación de dependencias
-        run: npm ci
         working-directory: ./Backend
+        run: npm ci
 
       - name: 4. Ejecución de Pruebas y Cobertura (CI)
-        run: npm run test:coverage
         working-directory: ./Backend
+        run: npm run test:coverage
         env:
           NODE_ENV: test
           SESSION_SECRET: "test_secret"
