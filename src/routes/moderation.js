@@ -691,6 +691,106 @@ router.get("/user/:userId", verifyToken, requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/moderation/user/:userId/export?format=csv|xlsx - Exportar historial de moderación de un usuario
+router.get(
+  "/user/:userId/export",
+  verifyToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      await recalculateUserStatus(req.params.userId);
+
+      const user = await User.findById(req.params.userId)
+        .select("username steamId")
+        .lean();
+
+      if (!user) {
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
+
+      const actions = await ModerationAction.find({ userId: req.params.userId })
+        .populate("appliedBy", "username")
+        .populate("revokedBy", "username")
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const format = req.query.format === "xlsx" ? "xlsx" : "csv";
+      const filenameBase = `historial-${user.username || user.steamId || req.params.userId}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}`;
+      const headers = [
+        "id",
+        "username",
+        "steamId",
+        "action",
+        "reason",
+        "isActive",
+        "createdAt",
+        "expiresAt",
+        "revokedAt",
+        "revokedBy",
+        "appliedBy",
+        "duration",
+        "revokeReason",
+      ];
+
+      const rows = actions.map((action) => [
+        action._id?.toString(),
+        user.username || "",
+        user.steamId || "",
+        action.action || "",
+        (action.reason || "").replace(/\r?\n/g, " "),
+        action.isActive ? "true" : "false",
+        action.createdAt ? new Date(action.createdAt).toISOString() : "",
+        action.expiresAt ? new Date(action.expiresAt).toISOString() : "",
+        action.revokedAt ? new Date(action.revokedAt).toISOString() : "",
+        action.revokedBy?.username || "",
+        action.appliedBy?.username || "",
+        action.duration ?? "",
+        action.revokeReason || "",
+      ]);
+
+      if (format === "xlsx") {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet("Historial");
+        sheet.addRow(headers);
+        rows.forEach((row) => sheet.addRow(row));
+        res.setHeader(
+          "Content-Type",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        );
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${filenameBase}.xlsx"`,
+        );
+        await workbook.xlsx.write(res);
+        res.end();
+        return;
+      }
+
+      const escapeCsv = (value) => {
+        if (value === null || value === undefined) return "";
+        const text = String(value);
+        if (text.includes(",") || text.includes("\n") || text.includes('"')) {
+          return `"${text.replace(/"/g, '""')}"`;
+        }
+        return text;
+      };
+
+      const csvLines = [headers.map(escapeCsv).join(",")].concat(
+        rows.map((row) => row.map(escapeCsv).join(",")),
+      );
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filenameBase}.csv"`,
+      );
+      res.send(csvLines.join("\n"));
+    } catch (error) {
+      console.error("Error exportando historial de usuario:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
 // ========== AUDIT LOG ==========
 
 // GET /api/moderation/audit-log - Registro de auditoría (admin only)
