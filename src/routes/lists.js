@@ -2,6 +2,7 @@ import express from 'express';
 import GameList from '../models/GameList.js';
 import User from '../models/User.js';
 import Comment from '../models/Comment.js';
+import Notification from '../models/Notification.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireCanPublish } from '../middleware/moderationStatus.js';
 
@@ -180,6 +181,47 @@ router.post('/:id/comments', verifyToken, requireCanPublish, async (req, res) =>
     });
     const saved = await newComment.save();
     await saved.populate('author', 'username avatar steamId');
+    
+    // --- LÓGICA DE NOTIFICACIONES POR MENCIÓN ---
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+    let match;
+    const mentionedUsernames = new Set();
+    
+    while ((match = mentionRegex.exec(content)) !== null) {
+      mentionedUsernames.add(match[1]); // Extraemos el nombre sin la '@'
+    }
+
+    if (mentionedUsernames.size > 0) {
+      // Buscar en MongoDB si esos usuarios realmente existen
+      const mentionedUsers = await User.find({ 
+        username: { $in: Array.from(mentionedUsernames) } 
+      });
+
+      const notifications = [];
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30); // La notificación se borrará automáticamente en 30 días
+
+      for (const mentionedUser of mentionedUsers) {
+        // Evitamos enviar una notificación a nosotros mismos si escribimos nuestro propio @nombre
+        if (mentionedUser._id.toString() !== req.user._id.toString()) {
+          notifications.push({
+            recipient: mentionedUser._id,
+            from: req.user._id,
+            type: "list_mention",
+            title: "Mención en Lista",
+            message: `${req.user.username} te ha mencionado en un comentario.`,
+            data: { listId: req.params.id, commentId: saved._id }, // Para que al clicar en la noti le lleve a la lista
+            expiresAt
+          });
+        }
+      }
+
+      // Si hay notificaciones válidas, insertarlas de golpe en la base de datos
+      if (notifications.length > 0) {
+        await Notification.insertMany(notifications);
+      }
+    }
+    // ---------------------------------------------
     
     res.status(201).json(saved);
   } catch (error) {
