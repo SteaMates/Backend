@@ -174,6 +174,7 @@ const GamingSession = {
   create: jest.fn((data) => Promise.resolve({ ...data, _id: 'gs1', save: jest.fn(async function() { return this; }) })),
   find: jest.fn(() => makeQuery([])),
   findById: jest.fn(() => makeQuery({})),
+  findOne: jest.fn(() => Promise.resolve(null)),
   countDocuments: jest.fn(() => Promise.resolve(0)),
 };
 
