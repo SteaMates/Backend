@@ -766,6 +766,8 @@ describe('Cobertura ampliada de rutas backend', () => {
     it('crea una sesión y notifica a participantes', async () => {
       const participantDoc = createUser('friend', { steamId: 'steam-friend' });
       User.findOneAndUpdate.mockResolvedValue(participantDoc);
+      // No conflict: host has no session at that time
+      GamingSession.findOne.mockResolvedValue(null);
       const sessionDoc = {
         _id: new mongoose.Types.ObjectId(),
       };
