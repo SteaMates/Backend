@@ -74,6 +74,23 @@ router.post("/", verifyToken, async (req, res) => {
       return res.status(400).json({ error: "scheduledAt must be an ISO date" });
     }
 
+    // Check host doesn't already have a session at the same date+time
+    const conflictWindow = 30 * 60 * 1000; // 30 minutes buffer
+    const existingSession = await GamingSession.findOne({
+      host: req.user._id,
+      status: { $ne: "cancelled" },
+      scheduledAt: {
+        $gte: new Date(scheduled.getTime() - conflictWindow),
+        $lte: new Date(scheduled.getTime() + conflictWindow),
+      },
+    });
+
+    if (existingSession) {
+      return res.status(409).json({
+        error: "Ya tienes una sesión programada a esa hora. Elige otro horario.",
+      });
+    }
+
     // Participants can be passed as array of { steamId, username, avatar }
     const participantProfiles = Array.isArray(participants) ? participants : [];
     const participantSteamIds = uniqStrings(
