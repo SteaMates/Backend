@@ -3,6 +3,7 @@ import GamingSession from "../models/GamingSession.js";
 import Notification from "../models/Notification.js";
 import User from "../models/User.js";
 import { verifyToken } from "../middleware/auth.js";
+import { validateSessionCreate } from "../validation/validators.js";
 
 const router = express.Router();
 
@@ -48,31 +49,26 @@ async function upsertUserFromSteamProfile({ steamId, username, avatar }) {
  */
 router.post("/", verifyToken, async (req, res) => {
   try {
-    const { game, date, time, scheduledAt, participants, notes, notifyFriends } =
-      req.body || {};
-
-    const appId = game?.appId ?? game?.appid;
-    const gameName = game?.name;
-    const headerImage = game?.headerImage || game?.header_image || "";
-
-    if (!appId || !gameName) {
+    const { ok, errors, value } = validateSessionCreate(req.body);
+    if (!ok) {
       return res
         .status(400)
-        .json({ error: "game.appId/appid and game.name are required" });
+        .json({ error: errors[0].message, details: errors });
     }
 
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return res.status(400).json({ error: "date must be YYYY-MM-DD" });
-    }
+    const {
+      appId,
+      name: gameName,
+      headerImage,
+      date,
+      time,
+      scheduledAt,
+      participants,
+      notes,
+      notifyFriends,
+    } = value;
 
-    if (!time || !/^\d{2}:\d{2}$/.test(time)) {
-      return res.status(400).json({ error: "time must be HH:MM" });
-    }
-
-    const scheduled = new Date(scheduledAt);
-    if (!scheduledAt || Number.isNaN(scheduled.getTime())) {
-      return res.status(400).json({ error: "scheduledAt must be an ISO date" });
-    }
+    const scheduled = scheduledAt;
 
     // Check host doesn't already have a session at the same date+time
     const conflictWindow = 30 * 60 * 1000; // 30 minutes buffer
@@ -87,12 +83,13 @@ router.post("/", verifyToken, async (req, res) => {
 
     if (existingSession) {
       return res.status(409).json({
-        error: "Ya tienes una sesión programada a esa hora. Elige otro horario.",
+        error:
+          "Ya tienes una sesión programada a esa hora. Elige otro horario.",
       });
     }
 
     // Participants can be passed as array of { steamId, username, avatar }
-    const participantProfiles = Array.isArray(participants) ? participants : [];
+    const participantProfiles = participants || [];
     const participantSteamIds = uniqStrings(
       participantProfiles.map((p) => p?.steamId),
     ).filter((sid) => sid !== req.user.steamId);
@@ -259,7 +256,6 @@ router.patch("/:id/respond", verifyToken, async (req, res) => {
   }
 });
 
-
 /**
  * PATCH /api/sessions/:id/leave
  * Participant abandons a session they previously accepted or were invited to.
@@ -280,11 +276,13 @@ router.patch("/:id/leave", verifyToken, async (req, res) => {
 
     // Host cannot leave — they can only cancel
     if (session.host._id.equals(req.user._id)) {
-      return res.status(400).json({ error: "Host cannot leave. Use cancel instead." });
+      return res
+        .status(400)
+        .json({ error: "Host cannot leave. Use cancel instead." });
     }
 
     const participant = session.participants.find((p) =>
-      p.user?._id?.equals(req.user._id)
+      p.user?._id?.equals(req.user._id),
     );
 
     if (!participant) {

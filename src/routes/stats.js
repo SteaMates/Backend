@@ -1,6 +1,7 @@
 import express from "express";
 import GameCache from "../models/GameCache.js";
 import { verifyToken } from "../middleware/auth.js";
+import { validateSteamIdsPayload } from "../validation/validators.js";
 
 const router = express.Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
@@ -88,13 +89,16 @@ async function getOwnedGamesWithCacheValue(steamId) {
     };
   }
 
-  const totalMinutes = games.reduce((acc, g) => acc + (g.playtime_forever || 0), 0);
+  const totalMinutes = games.reduce(
+    (acc, g) => acc + (g.playtime_forever || 0),
+    0,
+  );
   const totalHours = round(totalMinutes / 60, 1);
   const playedGames = games.filter((g) => (g.playtime_forever || 0) > 0).length;
   const unplayedGames = games.length - playedGames;
 
   const sorted = [...games].sort(
-    (a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0)
+    (a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0),
   );
   const top = sorted[0] || null;
 
@@ -122,7 +126,9 @@ async function getOwnedGamesWithCacheValue(steamId) {
   libraryValue = round(libraryValue, 0);
 
   const costPerHour =
-    totalHours > 0 ? round(libraryValue / totalHours, 2) : round(libraryValue, 2);
+    totalHours > 0
+      ? round(libraryValue / totalHours, 2)
+      : round(libraryValue, 2);
 
   return {
     games,
@@ -140,7 +146,9 @@ async function getOwnedGamesWithCacheValue(steamId) {
           hours: round((top.playtime_forever || 0) / 60, 1),
           percentOfTotal:
             totalHours > 0
-              ? Math.round((((top.playtime_forever || 0) / 60) / totalHours) * 100)
+              ? Math.round(
+                  ((top.playtime_forever || 0) / 60 / totalHours) * 100,
+                )
               : 0,
         }
       : null,
@@ -161,9 +169,11 @@ async function getAchievementSummary(steamId, ownedGames) {
   }
 
   const sorted = [...ownedGames].sort(
-    (a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0)
+    (a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0),
   );
-  const topGames = sorted.slice(0, 10).filter((g) => (g.playtime_forever || 0) > 0);
+  const topGames = sorted
+    .slice(0, 10)
+    .filter((g) => (g.playtime_forever || 0) > 0);
 
   let totalAchievements = 0;
   let totalUnlocked = 0;
@@ -175,7 +185,7 @@ async function getAchievementSummary(steamId, ownedGames) {
   for (const game of topGames) {
     try {
       const achRes = await fetch(
-        `${STEAM_API_BASE}/ISteamUserStats/GetPlayerAchievements/v0001/?key=${getSteamApiKey()}&steamid=${steamId}&appid=${game.appid}&l=spanish`
+        `${STEAM_API_BASE}/ISteamUserStats/GetPlayerAchievements/v0001/?key=${getSteamApiKey()}&steamid=${steamId}&appid=${game.appid}&l=spanish`,
       );
       const achData = await achRes.json();
       const achievements = achData.playerstats?.achievements || [];
@@ -194,7 +204,7 @@ async function getAchievementSummary(steamId, ownedGames) {
       let globalPercentages = {};
       try {
         const globalRes = await fetch(
-          `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/?gameid=${game.appid}`
+          `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/?gameid=${game.appid}`,
         );
         const globalData = await globalRes.json();
 
@@ -221,7 +231,9 @@ async function getAchievementSummary(steamId, ownedGames) {
   }
 
   const completionPct =
-    totalAchievements > 0 ? Math.round((totalUnlocked / totalAchievements) * 100) : 0;
+    totalAchievements > 0
+      ? Math.round((totalUnlocked / totalAchievements) * 100)
+      : 0;
 
   return {
     completionPct,
@@ -253,7 +265,13 @@ function buildRadarMetrics({ economy, time, achievements }) {
 }
 
 function scaleRadarScores(players) {
-  const axes = ["volumen", "dedicacion", "rentabilidad", "perfeccionismo", "fidelidad"];
+  const axes = [
+    "volumen",
+    "dedicacion",
+    "rentabilidad",
+    "perfeccionismo",
+    "fidelidad",
+  ];
 
   const maxByAxis = {};
   for (const axis of axes) {
@@ -378,7 +396,9 @@ router.get("/me/genres", verifyToken, async (req, res) => {
 
     const steamId = req.user?.steamId;
     if (!steamId) {
-      return res.status(400).json({ error: "Authenticated user has no steamId" });
+      return res
+        .status(400)
+        .json({ error: "Authenticated user has no steamId" });
     }
 
     const games = await fetchOwnedGames(steamId);
@@ -534,7 +554,9 @@ router.get("/me/achievements", verifyToken, async (req, res) => {
 
     const steamId = req.user?.steamId;
     if (!steamId) {
-      return res.status(400).json({ error: "Authenticated user has no steamId" });
+      return res
+        .status(400)
+        .json({ error: "Authenticated user has no steamId" });
     }
 
     const games = await fetchOwnedGames(steamId);
@@ -587,9 +609,11 @@ router.get("/me/achievements", verifyToken, async (req, res) => {
               `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/?gameid=${game.appid}`,
             );
             const globalData = await globalRes.json();
-            (globalData.achievementpercentages?.achievements || []).forEach((a) => {
-              globalPercentages[a.name] = a.percent;
-            });
+            (globalData.achievementpercentages?.achievements || []).forEach(
+              (a) => {
+                globalPercentages[a.name] = a.percent;
+              },
+            );
           } catch {}
 
           for (const ach of unlocked) {
@@ -727,9 +751,11 @@ router.get("/achievements/:steamId", async (req, res) => {
               `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/?gameid=${game.appid}`,
             );
             const globalData = await globalRes.json();
-            (globalData.achievementpercentages?.achievements || []).forEach((a) => {
-              globalPercentages[a.name] = a.percent;
-            });
+            (globalData.achievementpercentages?.achievements || []).forEach(
+              (a) => {
+                globalPercentages[a.name] = a.percent;
+              },
+            );
           } catch {}
 
           for (const ach of unlocked) {
@@ -821,13 +847,17 @@ router.post("/compare", async (req, res) => {
       return res.status(503).json({ error: "Steam API key not configured" });
     }
 
-    const { steamIds } = req.body;
-
-    if (!Array.isArray(steamIds) || steamIds.length === 0) {
-      return res.status(400).json({ error: "steamIds must be a non-empty array" });
+    const { ok, errors, value } = validateSteamIdsPayload(req.body?.steamIds, {
+      min: 1,
+      max: 6,
+    });
+    if (!ok) {
+      return res
+        .status(400)
+        .json({ error: errors[0].message, details: errors });
     }
 
-    const uniqueSteamIds = [...new Set(steamIds)].filter(Boolean).slice(0, 6);
+    const uniqueSteamIds = value;
 
     const players = [];
 

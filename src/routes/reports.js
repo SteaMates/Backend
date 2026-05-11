@@ -1,65 +1,47 @@
 import express from "express";
-import mongoose from 'mongoose';
-import { verifyToken } from '../middleware/auth.js';
-import Report from '../models/Report.js';
-import GameList from '../models/GameList.js';
-import Comment from '../models/Comment.js';
-import User from '../models/User.js';
+import { verifyToken } from "../middleware/auth.js";
+import Report from "../models/Report.js";
+import GameList from "../models/GameList.js";
+import Comment from "../models/Comment.js";
+import User from "../models/User.js";
+import { validateReportCreate } from "../validation/validators.js";
 
 const router = express.Router();
 
 const TARGET_CONFIG = {
-  list: { model: GameList, targetType: 'GameList' },
-  comment: { model: Comment, targetType: 'Comment' },
-  user: { model: User, targetType: 'User' },
+  list: { model: GameList, targetType: "GameList" },
+  comment: { model: Comment, targetType: "Comment" },
+  user: { model: User, targetType: "User" },
 };
 
-const ALLOWED_REASONS = [
-  // Para listas y comentarios
-  'Spam',
-  'Contenido Ofensivo',
-  'Informacion Falsa',
-  'Información Falsa',
-  'Otros',
-  // Para usuarios
-  'Nombre Ofensivo',
-  'Imagen Inadecuada',
-  'Se hace pasar por otra persona',
-];
-
-router.post('/', verifyToken, async (req, res) => {
+router.post("/", verifyToken, async (req, res) => {
   try {
-    const { targetId, targetType, reason, description } = req.body;
-
-    if (!targetId || !targetType || !reason) {
-      return res.status(400).json({
-        error: 'Campos requeridos: targetId, targetType, reason',
-      });
+    const { ok, errors, value } = validateReportCreate(req.body);
+    if (!ok) {
+      return res
+        .status(400)
+        .json({ error: errors[0].message, details: errors });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(targetId)) {
-      return res.status(400).json({ error: 'targetId invalido' });
-    }
-
+    const { targetId, targetType, reason, description } = value;
     const normalizedTargetType = String(targetType).toLowerCase();
     const targetConfig = TARGET_CONFIG[normalizedTargetType];
     if (!targetConfig) {
-      return res.status(400).json({ error: 'targetType invalido' });
-    }
-
-    if (!ALLOWED_REASONS.includes(reason)) {
-      return res.status(400).json({ error: 'reason invalido' });
+      return res.status(400).json({ error: "targetType invalido" });
     }
 
     const targetExists = await targetConfig.model.exists({ _id: targetId });
     if (!targetExists) {
-      return res.status(404).json({ error: 'Objetivo no encontrado' });
+      return res.status(404).json({ error: "Objetivo no encontrado" });
     }
 
     const isSelfReport =
-      normalizedTargetType === 'user' && targetId.toString() === req.user._id.toString();
+      normalizedTargetType === "user" &&
+      targetId.toString() === req.user._id.toString();
     if (isSelfReport) {
-      return res.status(400).json({ error: 'No puedes reportar tu propio perfil' });
+      return res
+        .status(400)
+        .json({ error: "No puedes reportar tu propio perfil" });
     }
 
     const existingReport = await Report.findOne({
@@ -70,7 +52,7 @@ router.post('/', verifyToken, async (req, res) => {
 
     if (existingReport) {
       return res.status(409).json({
-        error: 'Ya reportaste este contenido',
+        error: "Ya reportaste este contenido",
       });
     }
 
@@ -81,18 +63,18 @@ router.post('/', verifyToken, async (req, res) => {
       reporterId: req.user._id,
       reportedBy: req.user._id,
       reason,
-      description: description?.trim() || '',
-      status: 'pending',
+      description: description?.trim() || "",
+      status: "pending",
     });
 
     return res.status(201).json({ success: true, report });
   } catch (error) {
     if (error?.code === 11000) {
-      return res.status(409).json({ error: 'Ya reportaste este contenido' });
+      return res.status(409).json({ error: "Ya reportaste este contenido" });
     }
 
-    console.error('Error creando reporte:', error);
-    return res.status(500).json({ error: 'Error interno del servidor' });
+    console.error("Error creando reporte:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
 });
 

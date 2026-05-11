@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import GameCache from "../models/GameCache.js";
 import { verifyToken } from "../middleware/auth.js";
 import User from "../models/User.js";
+import { validateSteamIdsPayload } from "../validation/validators.js";
 
 const router = express.Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
@@ -39,7 +40,7 @@ function firstDefined(...values) {
 
 function toTimestampMs(raw) {
   if (raw === undefined || raw === null) return null;
-  
+
   // Handle ISO strings or other date formats
   if (typeof raw === "string" && isNaN(Number(raw))) {
     const d = new Date(raw);
@@ -127,7 +128,8 @@ function normalizeItadHistory(payload) {
   if (Array.isArray(payload?.items)) possibleArrays.push(payload.items);
   if (Array.isArray(payload?.prices)) possibleArrays.push(payload.prices);
   if (Array.isArray(payload?.list)) possibleArrays.push(payload.list);
-  if (Array.isArray(payload?.result?.history)) possibleArrays.push(payload.result.history);
+  if (Array.isArray(payload?.result?.history))
+    possibleArrays.push(payload.result.history);
 
   const points = [];
 
@@ -293,7 +295,9 @@ router.get("/me/profile", verifyToken, async (req, res) => {
 
     const steamId = req.user?.steamId;
     if (!steamId) {
-      return res.status(400).json({ error: "Authenticated user has no steamId" });
+      return res
+        .status(400)
+        .json({ error: "Authenticated user has no steamId" });
     }
 
     const response = await fetch(
@@ -406,7 +410,11 @@ router.get("/games/:steamId", async (req, res) => {
       libraryValue: Math.round(libraryValue),
       dataStatus: {
         hasData,
-        reason: hasData ? null : gameCount === 0 ? "no_games" : "private_or_unavailable",
+        reason: hasData
+          ? null
+          : gameCount === 0
+            ? "no_games"
+            : "private_or_unavailable",
         gameCount: gameCount ?? games.length,
       },
     });
@@ -426,7 +434,9 @@ router.get("/me/games", verifyToken, async (req, res) => {
 
     const steamId = req.user?.steamId;
     if (!steamId) {
-      return res.status(400).json({ error: "Authenticated user has no steamId" });
+      return res
+        .status(400)
+        .json({ error: "Authenticated user has no steamId" });
     }
 
     const response = await fetch(
@@ -476,7 +486,11 @@ router.get("/me/games", verifyToken, async (req, res) => {
       libraryValue: Math.round(libraryValue),
       dataStatus: {
         hasData,
-        reason: hasData ? null : gameCount === 0 ? "no_games" : "private_or_unavailable",
+        reason: hasData
+          ? null
+          : gameCount === 0
+            ? "no_games"
+            : "private_or_unavailable",
         gameCount: gameCount ?? games.length,
       },
     });
@@ -503,23 +517,31 @@ router.get("/search", async (req, res) => {
 
     // Exclude known non-game types (DLC, soundtrack, video, hardware, bundle).
     // Using a blocklist so items whose type is absent or unknown are kept.
-    const NON_GAME_TYPES = new Set(["dlc", "music", "video", "hardware", "bundle"]);
+    const NON_GAME_TYPES = new Set([
+      "dlc",
+      "music",
+      "video",
+      "hardware",
+      "bundle",
+    ]);
 
     const games = data.items
       .filter((item) => !NON_GAME_TYPES.has(item.type))
       .map((item) => {
         // storesearch returns price as an OBJECT: { currency, initial, final, discount_percent }
         // For free games price is null/undefined.
-        const priceObj = item.price;  // object or null
+        const priceObj = item.price; // object or null
         const isFree = !priceObj || priceObj.final === 0;
-        const priceDollars = isFree ? 0 : parseFloat((priceObj.final / 100).toFixed(2));
+        const priceDollars = isFree
+          ? 0
+          : parseFloat((priceObj.final / 100).toFixed(2));
 
         return {
           appId: item.id,
           name: item.name,
           type: item.type ?? "game",
           isFree,
-          price: priceDollars,   // number in dollars, 0 = free
+          price: priceDollars, // number in dollars, 0 = free
           tinyImage: item.tiny_image,
         };
       });
@@ -536,26 +558,26 @@ router.get("/free-games", async (req, res) => {
   try {
     // Map frontend sortBy values to Steam Store sort_by params
     const SORT_MAP = {
-      "_ASC":          "_ASC",
-      "Reviews_DESC":  "Reviews_DESC",   // Most popular (Highest rated)
-      "Released_DESC": "Released_DESC",  // Most recent
-      "Price_ASC":     "Price_ASC",      // Cheapest
-      "Discount_DESC": "Discount_DESC",  // Most discounted
+      _ASC: "_ASC",
+      Reviews_DESC: "Reviews_DESC", // Most popular (Highest rated)
+      Released_DESC: "Released_DESC", // Most recent
+      Price_ASC: "Price_ASC", // Cheapest
+      Discount_DESC: "Discount_DESC", // Most discounted
     };
-    const sort     = SORT_MAP[req.query.sort] ?? "_ASC";
-    const page     = Math.max(0, parseInt(req.query.page) || 0);
-    const start    = page * 40;
+    const sort = SORT_MAP[req.query.sort] ?? "_ASC";
+    const page = Math.max(0, parseInt(req.query.page) || 0);
+    const start = page * 40;
 
     const url = new URL("https://store.steampowered.com/search/results/");
-    url.searchParams.set("infinite",   "1");
-    url.searchParams.set("maxprice",   "free");
-    url.searchParams.set("count",      "40");
-    url.searchParams.set("start",      start.toString());
-    url.searchParams.set("sort_by",    sort);
-    url.searchParams.set("os",         "win");
+    url.searchParams.set("infinite", "1");
+    url.searchParams.set("maxprice", "free");
+    url.searchParams.set("count", "40");
+    url.searchParams.set("start", start.toString());
+    url.searchParams.set("sort_by", sort);
+    url.searchParams.set("os", "win");
 
     const response = await fetch(url.toString());
-    const data     = await response.json();
+    const data = await response.json();
 
     const games = [];
     if (data.results_html) {
@@ -566,16 +588,17 @@ router.get("/free-games", async (req, res) => {
         if (!appId || appId.includes(",")) return; // skip bundles/empty
 
         const name = elem.find(".title").text().trim();
-        const tinyImage = elem.find(".search_capsule img").attr("src") 
-          || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
-        
+        const tinyImage =
+          elem.find(".search_capsule img").attr("src") ||
+          `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
+
         games.push({
           appId,
           name,
           type: "game",
           isFree: true,
           price: "Gratis",
-          tinyImage
+          tinyImage,
         });
       });
     }
@@ -594,24 +617,24 @@ router.get("/free-games", async (req, res) => {
 router.get("/by-tags", async (req, res) => {
   try {
     const SORT_MAP = {
-      "_ASC":          "_ASC",
-      "Reviews_DESC":  "Reviews_DESC",
-      "Released_DESC": "Released_DESC",
-      "Price_ASC":     "Price_ASC",
-      "Discount_DESC": "Discount_DESC",
+      _ASC: "_ASC",
+      Reviews_DESC: "Reviews_DESC",
+      Released_DESC: "Released_DESC",
+      Price_ASC: "Price_ASC",
+      Discount_DESC: "Discount_DESC",
     };
-    const sort   = SORT_MAP[req.query.sort] ?? "_ASC";
-    const page   = Math.max(0, parseInt(req.query.page) || 0);
-    const tags   = req.query.tags || "";
+    const sort = SORT_MAP[req.query.sort] ?? "_ASC";
+    const page = Math.max(0, parseInt(req.query.page) || 0);
+    const tags = req.query.tags || "";
     const isFree = req.query.isFree === "true";
-    const start  = page * 40;
+    const start = page * 40;
 
     const url = new URL("https://store.steampowered.com/search/results/");
     url.searchParams.set("infinite", "1");
-    url.searchParams.set("count",   "40");
-    url.searchParams.set("start",   start.toString());
+    url.searchParams.set("count", "40");
+    url.searchParams.set("start", start.toString());
     url.searchParams.set("sort_by", sort);
-    url.searchParams.set("os",      "win");
+    url.searchParams.set("os", "win");
     url.searchParams.set("category1", "998"); // Games only
     if (tags) {
       url.searchParams.set("tags", tags);
@@ -621,7 +644,7 @@ router.get("/by-tags", async (req, res) => {
     }
 
     const response = await fetch(url.toString());
-    const data     = await response.json();
+    const data = await response.json();
 
     const games = [];
     if (data.results_html) {
@@ -632,25 +655,34 @@ router.get("/by-tags", async (req, res) => {
         if (!appId || appId.includes(",")) return;
 
         const name = elem.find(".title").text().trim();
-        const tinyImage = elem.find(".search_capsule img").attr("src") 
-          || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
-        
+        const tinyImage =
+          elem.find(".search_capsule img").attr("src") ||
+          `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
+
         let priceRaw = elem.find(".discount_final_price").text().trim();
         if (!priceRaw) priceRaw = elem.find(".search_price").text().trim();
-        
+
         let priceDollars = null;
         let originalPriceDollars = null;
         let discountPct = 0;
         let isFreeGame = isFree; // If the query was for isFree, they are all free
 
         let originalRaw = elem.find(".discount_original_price").text().trim();
-        let discountRaw = elem.find(".discount_pct, .search_discount span").text().trim();
-        
+        let discountRaw = elem
+          .find(".discount_pct, .search_discount span")
+          .text()
+          .trim();
+
         if (discountRaw && discountRaw.includes("%")) {
-          discountPct = parseInt(discountRaw.replace("-", "").replace("%", "")) || 0;
+          discountPct =
+            parseInt(discountRaw.replace("-", "").replace("%", "")) || 0;
         }
 
-        if (priceRaw.toLowerCase().includes("free") || priceRaw.toLowerCase().includes("gratis") || priceRaw === "Free To Play") {
+        if (
+          priceRaw.toLowerCase().includes("free") ||
+          priceRaw.toLowerCase().includes("gratis") ||
+          priceRaw === "Free To Play"
+        ) {
           isFreeGame = true;
         } else if (priceRaw) {
           // Find digits and commas/dots. e.g. "59,99€" -> "59.99"
@@ -660,10 +692,10 @@ router.get("/by-tags", async (req, res) => {
             if (priceDollars === 0) isFreeGame = true;
           }
           if (originalRaw) {
-             const oMatch = originalRaw.match(/[\d.,]+/);
-             if (oMatch) {
-               originalPriceDollars = parseFloat(oMatch[0].replace(",", "."));
-             }
+            const oMatch = originalRaw.match(/[\d.,]+/);
+            if (oMatch) {
+              originalPriceDollars = parseFloat(oMatch[0].replace(",", "."));
+            }
           }
         }
 
@@ -675,7 +707,7 @@ router.get("/by-tags", async (req, res) => {
           price: isFreeGame ? "Gratis" : priceDollars,
           originalPrice: originalPriceDollars,
           discountPct,
-          tinyImage
+          tinyImage,
         });
       });
     }
@@ -690,7 +722,6 @@ router.get("/by-tags", async (req, res) => {
   }
 });
 
-
 // In-memory cache for SteamSpy top 100 most played games
 let top100Cache = { data: null, timestamp: 0 };
 
@@ -699,21 +730,28 @@ router.get("/most-played", async (req, res) => {
   try {
     const page = Math.max(0, parseInt(req.query.page) || 0);
     const now = Date.now();
-    
+
     // Cache for 1 hour
     if (!top100Cache.data || now - top100Cache.timestamp > 1000 * 60 * 60) {
-      const response = await fetch("https://steamspy.com/api.php?request=top100in2weeks");
+      const response = await fetch(
+        "https://steamspy.com/api.php?request=top100in2weeks",
+      );
       const data = await response.json();
-      
+
       // Data is an object with game objects, sort by ccu (concurrent users / popularity)
       const gamesArray = Object.values(data).sort((a, b) => b.ccu - a.ccu);
-      
-      top100Cache.data = gamesArray.map(item => {
+
+      top100Cache.data = gamesArray.map((item) => {
         const appId = item.appid.toString();
-        const priceDollars = item.price == "0" ? "Gratis" : parseFloat((parseInt(item.price) / 100).toFixed(2));
-        const originalPriceDollars = item.initialprice ? parseFloat((parseInt(item.initialprice) / 100).toFixed(2)) : null;
+        const priceDollars =
+          item.price == "0"
+            ? "Gratis"
+            : parseFloat((parseInt(item.price) / 100).toFixed(2));
+        const originalPriceDollars = item.initialprice
+          ? parseFloat((parseInt(item.initialprice) / 100).toFixed(2))
+          : null;
         const discountPct = item.discount ? parseInt(item.discount) : 0;
-        
+
         return {
           appId,
           name: item.name,
@@ -722,18 +760,18 @@ router.get("/most-played", async (req, res) => {
           price: priceDollars,
           originalPrice: originalPriceDollars,
           discountPct,
-          tinyImage: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`
+          tinyImage: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
         };
       });
       top100Cache.timestamp = now;
     }
-    
+
     const start = page * 40;
     const pageData = top100Cache.data.slice(start, start + 40);
-    
+
     res.json({
       games: pageData,
-      hasMore: start + 40 < top100Cache.data.length
+      hasMore: start + 40 < top100Cache.data.length,
     });
   } catch (error) {
     console.error("Steam most-played error:", error);
@@ -748,7 +786,14 @@ router.get("/tags", async (req, res) => {
     const raw = typeof req.query.appIds === "string" ? req.query.appIds : "";
     if (!raw) return res.json({});
 
-    const appIds = [...new Set(raw.split(",").map(s => s.trim()).filter(Boolean))].slice(0, 60);
+    const appIds = [
+      ...new Set(
+        raw
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    ].slice(0, 60);
 
     // Fetch all cached entries in one DB query
     const TAGS_TTL_DAYS = 7;
@@ -760,7 +805,12 @@ router.get("/tags", async (req, res) => {
 
     for (const doc of cached) {
       const id = doc.appId.toString();
-      if (doc.tags && doc.tags.length > 0 && doc.tagsUpdated && doc.tagsUpdated > cutoff) {
+      if (
+        doc.tags &&
+        doc.tags.length > 0 &&
+        doc.tagsUpdated &&
+        doc.tagsUpdated > cutoff
+      ) {
         // Fresh cache hit — use immediately
         cachedMap[id] = doc.tags;
       } else {
@@ -770,8 +820,8 @@ router.get("/tags", async (req, res) => {
     }
 
     // Any appId not in DB at all also needs fetching
-    const cachedIds = new Set(cached.map(d => d.appId.toString()));
-    const missing = appIds.filter(id => !cachedIds.has(id));
+    const cachedIds = new Set(cached.map((d) => d.appId.toString()));
+    const missing = appIds.filter((id) => !cachedIds.has(id));
     const toFetch = [...stale, ...missing];
 
     // Respond immediately with whatever we have cached
@@ -783,7 +833,7 @@ router.get("/tags", async (req, res) => {
         for (const appId of toFetch) {
           try {
             const spyRes = await fetch(
-              `https://steamspy.com/api.php?request=appdetails&appid=${appId}`
+              `https://steamspy.com/api.php?request=appdetails&appid=${appId}`,
             );
             if (!spyRes.ok) continue;
             const spyData = await spyRes.json();
@@ -805,9 +855,9 @@ router.get("/tags", async (req, res) => {
             console.error(`SteamSpy tags error for ${appId}:`, err.message);
           }
           // SteamSpy rate limit: 1 req/s
-          await new Promise(r => setTimeout(r, 1050));
+          await new Promise((r) => setTimeout(r, 1050));
         }
-      })().catch(err => console.error("Background tags fetch error:", err));
+      })().catch((err) => console.error("Background tags fetch error:", err));
     }
   } catch (error) {
     console.error("Steam tags error:", error);
@@ -828,7 +878,9 @@ router.get("/app/:appId", async (req, res) => {
     );
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: "Steam app request failed" });
+      return res
+        .status(response.status)
+        .json({ error: "Steam app request failed" });
     }
 
     const raw = await response.json();
@@ -868,20 +920,27 @@ router.get("/itad/history", async (req, res) => {
       });
     }
 
-    const appId = typeof req.query.appId === "string" ? req.query.appId.trim() : "";
-    const title = typeof req.query.title === "string" ? req.query.title.trim() : "";
-    const country = typeof req.query.country === "string" && req.query.country
-      ? req.query.country
-      : "ES";
+    const appId =
+      typeof req.query.appId === "string" ? req.query.appId.trim() : "";
+    const title =
+      typeof req.query.title === "string" ? req.query.title.trim() : "";
+    const country =
+      typeof req.query.country === "string" && req.query.country
+        ? req.query.country
+        : "ES";
 
     if (!appId && !title) {
-      return res.status(400).json({ error: "appId or title query param is required" });
+      return res
+        .status(400)
+        .json({ error: "appId or title query param is required" });
     }
 
     let gameId = null;
 
     if (appId) {
-      const lookupUrl = new URL("https://api.isthereanydeal.com/games/lookup/v1");
+      const lookupUrl = new URL(
+        "https://api.isthereanydeal.com/games/lookup/v1",
+      );
       lookupUrl.searchParams.set("key", key);
       lookupUrl.searchParams.set("appid", appId);
       lookupUrl.searchParams.set("shop", "steam");
@@ -894,7 +953,9 @@ router.get("/itad/history", async (req, res) => {
     }
 
     if (!gameId && title) {
-      const searchUrl = new URL("https://api.isthereanydeal.com/games/search/v1");
+      const searchUrl = new URL(
+        "https://api.isthereanydeal.com/games/search/v1",
+      );
       searchUrl.searchParams.set("key", key);
       searchUrl.searchParams.set("title", title);
       searchUrl.searchParams.set("results", "1");
@@ -907,10 +968,14 @@ router.get("/itad/history", async (req, res) => {
     }
 
     if (!gameId) {
-      return res.status(404).json({ error: "Game not found in IsThereAnyDeal" });
+      return res
+        .status(404)
+        .json({ error: "Game not found in IsThereAnyDeal" });
     }
 
-    const historyUrl = new URL("https://api.isthereanydeal.com/games/history/v2");
+    const historyUrl = new URL(
+      "https://api.isthereanydeal.com/games/history/v2",
+    );
     historyUrl.searchParams.set("key", key);
     historyUrl.searchParams.set("id", gameId);
     historyUrl.searchParams.set("country", country);
@@ -934,7 +999,9 @@ router.get("/itad/history", async (req, res) => {
     });
   } catch (error) {
     console.error("IsThereAnyDeal history error:", error);
-    return res.status(500).json({ error: "Error fetching IsThereAnyDeal history" });
+    return res
+      .status(500)
+      .json({ error: "Error fetching IsThereAnyDeal history" });
   }
 });
 
@@ -975,7 +1042,8 @@ router.get("/friends/:steamId", async (req, res) => {
       avatar: p.avatarfull,
       status: p.personastate,
       currentGame: p.gameextrainfo || null,
-      friendSince: friendsList.find((f) => f.steamid === p.steamid)?.friend_since,
+      friendSince: friendsList.find((f) => f.steamid === p.steamid)
+        ?.friend_since,
     }));
 
     friends.sort((a, b) => (b.status > 0 ? 1 : 0) - (a.status > 0 ? 1 : 0));
@@ -1030,7 +1098,9 @@ router.get("/me/recent", verifyToken, async (req, res) => {
 
     const steamId = req.user?.steamId;
     if (!steamId) {
-      return res.status(400).json({ error: "Authenticated user has no steamId" });
+      return res
+        .status(400)
+        .json({ error: "Authenticated user has no steamId" });
     }
 
     const response = await fetch(
@@ -1065,15 +1135,17 @@ router.post("/common-games", async (req, res) => {
       return res.status(503).json({ error: "Steam API key not configured" });
     }
 
-    const { steamIds } = req.body;
-
-    if (!Array.isArray(steamIds) || steamIds.length < 2) {
+    const { ok, errors, value } = validateSteamIdsPayload(req.body?.steamIds, {
+      min: 2,
+      max: 6,
+    });
+    if (!ok) {
       return res
         .status(400)
-        .json({ error: "steamIds must contain at least 2 ids" });
+        .json({ error: errors[0].message, details: errors });
     }
 
-    const uniqueSteamIds = [...new Set(steamIds)].filter(Boolean).slice(0, 6);
+    const uniqueSteamIds = value;
 
     const ownedGamesPerUser = [];
     for (const steamId of uniqueSteamIds) {
@@ -1175,14 +1247,18 @@ router.post("/games-info", async (req, res) => {
 router.get("/players/:appId", async (req, res) => {
   try {
     const { appId } = req.params;
-    const response = await fetch(`https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${appId}`);
+    const response = await fetch(
+      `https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${appId}`,
+    );
     if (!response.ok) {
-      return res.status(response.status).json({ error: "Steam API returned error" });
+      return res
+        .status(response.status)
+        .json({ error: "Steam API returned error" });
     }
     const data = await response.json();
     res.json({
       player_count: data.response?.player_count || 0,
-      result: data.response?.result || 0
+      result: data.response?.result || 0,
     });
   } catch (error) {
     console.error("Steam player count error:", error);

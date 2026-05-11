@@ -8,6 +8,11 @@ import User from "../models/User.js";
 import GameList from "../models/GameList.js";
 import Comment from "../models/Comment.js";
 import ExcelJS from "exceljs";
+import mongoose from "mongoose";
+import {
+  validateModerationAction,
+  validateModerationReportResolution,
+} from "../validation/validators.js";
 
 const router = express.Router();
 
@@ -250,6 +255,10 @@ router.delete(
     try {
       const { type, id } = req.params;
 
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ error: "Invalid content id" });
+      }
+
       if (type === "list") {
         const list = await GameList.findById(id);
         if (!list)
@@ -344,11 +353,18 @@ router.delete(
 // PUT /api/moderation/reports/:id - Resolver reporte (admin only)
 router.put("/reports/:id", verifyToken, requireAdmin, async (req, res) => {
   try {
-    const { status, resolution } = req.body;
-
-    if (!["pending", "resolved", "dismissed"].includes(status)) {
-      return res.status(400).json({ error: "Estado inválido" });
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid report id" });
     }
+
+    const { ok, errors, value } = validateModerationReportResolution(req.body);
+    if (!ok) {
+      return res
+        .status(400)
+        .json({ error: errors[0].message, details: errors });
+    }
+
+    const { status, resolution } = value;
 
     const report = await Report.findById(req.params.id);
     if (!report)
@@ -544,22 +560,16 @@ router.get("/export", verifyToken, requireAdmin, async (req, res) => {
 // POST /api/moderation/actions - Aplicar sanción a usuario (admin only)
 router.post("/actions", verifyToken, requireAdmin, async (req, res) => {
   try {
-    const { userId, action, reason, duration } = req.body;
-
-    if (!["warned", "silenced", "banned", "suspended"].includes(action)) {
-      return res.status(400).json({ error: "Acción de moderación inválida" });
+    const { ok, errors, value } = validateModerationAction(req.body);
+    if (!ok) {
+      return res
+        .status(400)
+        .json({ error: errors[0].message, details: errors });
     }
 
-    const hasDuration =
-      duration !== undefined && duration !== null && duration !== "";
+    const { userId, action, reason, duration } = value;
+    const hasDuration = duration !== undefined && duration !== null;
     const parsedDuration = hasDuration ? Number(duration) : null;
-    if ((action === "silenced" || action === "banned") && hasDuration) {
-      if (!Number.isInteger(parsedDuration) || parsedDuration <= 0) {
-        return res
-          .status(400)
-          .json({ error: "La duración debe ser un número entero mayor que 0" });
-      }
-    }
 
     // Sincroniza estado antes de decidir si esta petición aplica o revierte.
     await recalculateUserStatus(userId);
@@ -676,6 +686,10 @@ router.post("/actions", verifyToken, requireAdmin, async (req, res) => {
 // GET /api/moderation/user/:userId - Historial de moderación
 router.get("/user/:userId", verifyToken, requireAdmin, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
+      return res.status(400).json({ error: "Invalid user id" });
+    }
+
     // El historial se devuelve con el estado ya sincronizado tras posibles expiraciones.
     await recalculateUserStatus(req.params.userId);
 
@@ -698,6 +712,10 @@ router.get(
   requireAdmin,
   async (req, res) => {
     try {
+      if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
+        return res.status(400).json({ error: "Invalid user id" });
+      }
+
       await recalculateUserStatus(req.params.userId);
 
       const user = await User.findById(req.params.userId)

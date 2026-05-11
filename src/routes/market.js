@@ -4,12 +4,18 @@ import { randomUUID } from "crypto";
 import { verifyToken } from "../middleware/auth.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
+import {
+  validatePriceAlertCreate,
+  validatePriceAlertUpdate,
+  validateWishlistCreate,
+} from "../validation/validators.js";
 
 const router = express.Router();
 
 const CHEAPSHARK_BASE_URL = "https://www.cheapshark.com/api/1.0";
 const CHEAPSHARK_HEADERS = {
-  "User-Agent": "SteaMates-Backend/1.0 (+https://steamates-frontend.vercel.app)",
+  "User-Agent":
+    "SteaMates-Backend/1.0 (+https://steamates-frontend.vercel.app)",
 };
 const NOTIFICATION_TTL_DAYS = Number(process.env.NOTIFICATIONS_TTL_DAYS || 30);
 
@@ -63,19 +69,29 @@ function getIdentityMatches(item, id) {
 
 function findDealIdentity(item) {
   return (
-    normalizeText(item?.id)
-    || normalizeText(item?.steamAppId)
-    || normalizeText(item?.gameId)
-    || normalizeText(item?.title).toLowerCase()
+    normalizeText(item?.id) ||
+    normalizeText(item?.steamAppId) ||
+    normalizeText(item?.gameId) ||
+    normalizeText(item?.title).toLowerCase()
   );
 }
 
 function isAlertTriggered(alert, currentPrice) {
   const targetPrice = toNumber(alert?.targetPrice);
-  return Boolean(alert?.enabled && currentPrice !== null && targetPrice !== null && currentPrice <= targetPrice);
+  return Boolean(
+    alert?.enabled &&
+    currentPrice !== null &&
+    targetPrice !== null &&
+    currentPrice <= targetPrice,
+  );
 }
 
-function buildPriceAlertNotification({ recipientId, alert, currentPrice, targetPrice }) {
+function buildPriceAlertNotification({
+  recipientId,
+  alert,
+  currentPrice,
+  targetPrice,
+}) {
   return {
     recipient: recipientId,
     from: null,
@@ -123,16 +139,21 @@ async function fetchCurrentDealForItem(item) {
       params.set("storeID", "1");
       params.set("steamAppID", steamAppId);
       // Sin pageSize=1 para que devuelva todas las ofertas de la tienda (juego base + DLCs)
-      
-      const response = await fetch(`${CHEAPSHARK_BASE_URL}/deals?${params.toString()}`, {
-        headers: CHEAPSHARK_HEADERS,
-      });
+
+      const response = await fetch(
+        `${CHEAPSHARK_BASE_URL}/deals?${params.toString()}`,
+        {
+          headers: CHEAPSHARK_HEADERS,
+        },
+      );
 
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data) && data.length > 0) {
           // Filtramos y devolvemos la oferta más barata o la que encaje exactamente
-          return data.sort((a, b) => parseFloat(a.salePrice) - parseFloat(b.salePrice))[0];
+          return data.sort(
+            (a, b) => parseFloat(a.salePrice) - parseFloat(b.salePrice),
+          )[0];
         }
       }
     } catch {
@@ -148,9 +169,12 @@ async function fetchCurrentDealForItem(item) {
       params.set("title", title);
       params.set("pageSize", "3");
 
-      const response = await fetch(`${CHEAPSHARK_BASE_URL}/deals?${params.toString()}`, {
-        headers: CHEAPSHARK_HEADERS,
-      });
+      const response = await fetch(
+        `${CHEAPSHARK_BASE_URL}/deals?${params.toString()}`,
+        {
+          headers: CHEAPSHARK_HEADERS,
+        },
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -208,7 +232,9 @@ function enrichWithLiveData(items, liveDataMap) {
   return items.map((item) => {
     const identity = findDealIdentity(item);
     const liveDeal = liveDataMap.get(identity) || null;
-    const currentPrice = toNumber(liveDeal?.salePrice ?? item.salePrice ?? item.price);
+    const currentPrice = toNumber(
+      liveDeal?.salePrice ?? item.salePrice ?? item.price,
+    );
     const normalPrice = toNumber(liveDeal?.normalPrice ?? item.normalPrice);
     const savings = toNumber(liveDeal?.savings ?? item.savings);
 
@@ -238,7 +264,12 @@ async function maybeNotifyTriggeredAlert(userDoc, alertIndex) {
   const targetPrice = toNumber(alert?.targetPrice);
   const triggered = isAlertTriggered(alert, currentPrice);
 
-  if (triggered && !alert.notifiedAt && currentPrice !== null && targetPrice !== null) {
+  if (
+    triggered &&
+    !alert.notifiedAt &&
+    currentPrice !== null &&
+    targetPrice !== null
+  ) {
     const now = new Date();
     await Notification.create(
       buildPriceAlertNotification({
@@ -275,8 +306,12 @@ router.get("/wishlist", verifyToken, async (req, res) => {
     const hasBackfilledIds = ensureTrackingIds(user);
 
     const wishlist = [...(user.wishlist || [])]
-      .map((item) => (typeof item?.toObject === "function" ? item.toObject() : item))
-      .sort((a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime());
+      .map((item) =>
+        typeof item?.toObject === "function" ? item.toObject() : item,
+      )
+      .sort(
+        (a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime(),
+      );
 
     const withLive = String(req.query.live ?? "true") !== "false";
     if (!withLive || wishlist.length === 0) {
@@ -313,27 +348,27 @@ router.get("/wishlist", verifyToken, async (req, res) => {
 // POST /api/market/wishlist
 router.post("/wishlist", verifyToken, async (req, res) => {
   try {
-    const steamAppId = normalizeText(req.body?.steamAppId);
-    const gameId = normalizeText(req.body?.gameId);
-    const title = normalizeText(req.body?.title);
-    const thumb = normalizeText(req.body?.thumb);
-
-    if (!title) {
-      return res.status(400).json({ error: "title is required" });
+    const { ok, errors, value } = validateWishlistCreate(req.body);
+    if (!ok) {
+      return res
+        .status(400)
+        .json({ error: errors[0].message, details: errors });
     }
 
-    if (!steamAppId && !gameId) {
-      return res.status(400).json({ error: "steamAppId or gameId is required" });
-    }
+    const steamAppId = normalizeText(value.steamAppId);
+    const gameId = normalizeText(value.gameId);
+    const title = normalizeText(value.title);
+    const thumb = normalizeText(value.thumb);
 
     const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const existing = (user.wishlist || []).find((item) =>
-      (steamAppId && item.steamAppId === steamAppId) ||
-      (gameId && item.gameId === gameId),
+    const existing = (user.wishlist || []).find(
+      (item) =>
+        (steamAppId && item.steamAppId === steamAppId) ||
+        (gameId && item.gameId === gameId),
     );
 
     if (existing) {
@@ -375,7 +410,9 @@ router.delete("/wishlist/:id", verifyToken, async (req, res) => {
     const hasBackfilledIds = ensureTrackingIds(user);
 
     const before = (user.wishlist || []).length;
-    user.wishlist = (user.wishlist || []).filter((item) => !getIdentityMatches(item, id));
+    user.wishlist = (user.wishlist || []).filter(
+      (item) => !getIdentityMatches(item, id),
+    );
     const removed = before - user.wishlist.length;
 
     if (removed > 0 || hasBackfilledIds) {
@@ -401,8 +438,14 @@ router.get("/alerts", verifyToken, async (req, res) => {
     const hasBackfilledIds = ensureTrackingIds(user);
 
     const alerts = [...(user.priceAlerts || [])]
-      .map((item) => (typeof item?.toObject === "function" ? item.toObject() : item))
-      .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+      .map((item) =>
+        typeof item?.toObject === "function" ? item.toObject() : item,
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt || b.createdAt).getTime() -
+          new Date(a.updatedAt || a.createdAt).getTime(),
+      );
 
     const withLive = String(req.query.live ?? "true") !== "false";
     if (!withLive || alerts.length === 0) {
@@ -430,45 +473,56 @@ router.get("/alerts", verifyToken, async (req, res) => {
     const now = new Date();
 
     const alertIndexByIdentity = new Map(
-      (user.priceAlerts || []).map((alert, index) => [findDealIdentity(alert), index]),
+      (user.priceAlerts || []).map((alert, index) => [
+        findDealIdentity(alert),
+        index,
+      ]),
     );
 
-    const enrichedAlerts = enrichWithLiveData(alerts, liveDataMap).map((alert) => {
-      const currentPrice = alert.currentPrice;
-      const targetPrice = toNumber(alert.targetPrice);
-      const triggered = isAlertTriggered(alert, currentPrice);
+    const enrichedAlerts = enrichWithLiveData(alerts, liveDataMap).map(
+      (alert) => {
+        const currentPrice = alert.currentPrice;
+        const targetPrice = toNumber(alert.targetPrice);
+        const triggered = isAlertTriggered(alert, currentPrice);
 
-      const identity = findDealIdentity(alert);
-      const storedIndex = alertIndexByIdentity.get(identity);
-      const storedAlert = storedIndex !== undefined ? user.priceAlerts?.[storedIndex] : null;
+        const identity = findDealIdentity(alert);
+        const storedIndex = alertIndexByIdentity.get(identity);
+        const storedAlert =
+          storedIndex !== undefined ? user.priceAlerts?.[storedIndex] : null;
 
-      if (storedAlert) {
-        if (triggered && !storedAlert.notifiedAt && currentPrice !== null && targetPrice !== null) {
-          storedAlert.notifiedAt = now;
-          storedAlert.lastTriggeredAt = now;
-          hasStateChanges = true;
-          notificationsToCreate.push(
-            buildPriceAlertNotification({
-              recipientId: user._id,
-              alert: storedAlert,
-              currentPrice,
-              targetPrice,
-            }),
-          );
+        if (storedAlert) {
+          if (
+            triggered &&
+            !storedAlert.notifiedAt &&
+            currentPrice !== null &&
+            targetPrice !== null
+          ) {
+            storedAlert.notifiedAt = now;
+            storedAlert.lastTriggeredAt = now;
+            hasStateChanges = true;
+            notificationsToCreate.push(
+              buildPriceAlertNotification({
+                recipientId: user._id,
+                alert: storedAlert,
+                currentPrice,
+                targetPrice,
+              }),
+            );
+          }
+
+          if (!triggered && storedAlert.notifiedAt) {
+            storedAlert.notifiedAt = null;
+            hasStateChanges = true;
+          }
         }
 
-        if (!triggered && storedAlert.notifiedAt) {
-          storedAlert.notifiedAt = null;
-          hasStateChanges = true;
-        }
-      }
-
-      return {
-        ...alert,
-        targetPrice,
-        triggered,
-      };
-    });
+        return {
+          ...alert,
+          targetPrice,
+          triggered,
+        };
+      },
+    );
 
     if (notificationsToCreate.length > 0) {
       await Notification.insertMany(notificationsToCreate);
@@ -489,37 +543,37 @@ router.get("/alerts", verifyToken, async (req, res) => {
 // POST /api/market/alerts
 router.post("/alerts", verifyToken, async (req, res) => {
   try {
-    const steamAppId = normalizeText(req.body?.steamAppId);
-    const gameId = normalizeText(req.body?.gameId);
-    const title = normalizeText(req.body?.title);
-    const thumb = normalizeText(req.body?.thumb);
-    const targetPrice = toNumber(req.body?.targetPrice);
+    const { ok, errors, value } = validatePriceAlertCreate(req.body);
+    if (!ok) {
+      return res
+        .status(400)
+        .json({ error: errors[0].message, details: errors });
+    }
 
-    if (!title) {
-      return res.status(400).json({ error: "title is required" });
-    }
-    if (!steamAppId && !gameId) {
-      return res.status(400).json({ error: "steamAppId or gameId is required" });
-    }
-    if (targetPrice === null || targetPrice <= 0) {
-      return res.status(400).json({ error: "targetPrice must be greater than 0" });
-    }
+    const steamAppId = normalizeText(value.steamAppId);
+    const gameId = normalizeText(value.gameId);
+    const title = normalizeText(value.title);
+    const thumb = normalizeText(value.thumb);
+    const targetPrice = toNumber(value.targetPrice);
 
     const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const existingIndex = (user.priceAlerts || []).findIndex((item) =>
-      (steamAppId && item.steamAppId === steamAppId) ||
-      (gameId && item.gameId === gameId),
+    const existingIndex = (user.priceAlerts || []).findIndex(
+      (item) =>
+        (steamAppId && item.steamAppId === steamAppId) ||
+        (gameId && item.gameId === gameId),
     );
 
     if (existingIndex >= 0) {
       user.priceAlerts[existingIndex].targetPrice = targetPrice;
       user.priceAlerts[existingIndex].enabled = true;
-      user.priceAlerts[existingIndex].thumb = thumb || user.priceAlerts[existingIndex].thumb || "";
-      user.priceAlerts[existingIndex].title = title || user.priceAlerts[existingIndex].title;
+      user.priceAlerts[existingIndex].thumb =
+        thumb || user.priceAlerts[existingIndex].thumb || "";
+      user.priceAlerts[existingIndex].title =
+        title || user.priceAlerts[existingIndex].title;
       user.priceAlerts[existingIndex].notifiedAt = null;
       user.priceAlerts[existingIndex].lastTriggeredAt = null;
       user.priceAlerts[existingIndex].updatedAt = new Date();
@@ -553,7 +607,9 @@ router.post("/alerts", verifyToken, async (req, res) => {
 
     const triggeredNow = await maybeNotifyTriggeredAlert(user, 0);
 
-    return res.status(201).json({ alert: user.priceAlerts[0], existed: false, triggeredNow });
+    return res
+      .status(201)
+      .json({ alert: user.priceAlerts[0], existed: false, triggeredNow });
   } catch (error) {
     console.error("Price alert create error:", error);
     return res.status(500).json({ error: "Error creating price alert" });
@@ -567,6 +623,16 @@ router.patch("/alerts/:id", verifyToken, async (req, res) => {
     const nextTarget = req.body?.targetPrice;
     const nextEnabled = req.body?.enabled;
 
+    const { ok, errors } = validatePriceAlertUpdate({
+      targetPrice: nextTarget,
+      enabled: nextEnabled,
+    });
+    if (!ok) {
+      return res
+        .status(400)
+        .json({ error: errors[0].message, details: errors });
+    }
+
     const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
@@ -574,7 +640,9 @@ router.patch("/alerts/:id", verifyToken, async (req, res) => {
 
     ensureTrackingIds(user);
 
-    const index = (user.priceAlerts || []).findIndex((item) => getIdentityMatches(item, id));
+    const index = (user.priceAlerts || []).findIndex((item) =>
+      getIdentityMatches(item, id),
+    );
     if (index < 0) {
       return res.status(404).json({ error: "Price alert not found" });
     }
@@ -582,7 +650,9 @@ router.patch("/alerts/:id", verifyToken, async (req, res) => {
     if (nextTarget !== undefined) {
       const target = toNumber(nextTarget);
       if (target === null || target <= 0) {
-        return res.status(400).json({ error: "targetPrice must be greater than 0" });
+        return res
+          .status(400)
+          .json({ error: "targetPrice must be greater than 0" });
       }
       user.priceAlerts[index].targetPrice = target;
       user.priceAlerts[index].notifiedAt = null;
@@ -626,7 +696,9 @@ router.delete("/alerts/:id", verifyToken, async (req, res) => {
     const hasBackfilledIds = ensureTrackingIds(user);
 
     const before = (user.priceAlerts || []).length;
-    user.priceAlerts = (user.priceAlerts || []).filter((item) => !getIdentityMatches(item, id));
+    user.priceAlerts = (user.priceAlerts || []).filter(
+      (item) => !getIdentityMatches(item, id),
+    );
     const removed = before - user.priceAlerts.length;
 
     if (removed > 0 || hasBackfilledIds) {
