@@ -9,6 +9,7 @@ import { requireCanPublish } from "../middleware/moderationStatus.js";
 import {
   validateCommentCreate,
   validateListCreate,
+  isObjectId,
 } from "../validation/validators.js";
 
 const router = express.Router();
@@ -101,7 +102,7 @@ router.get("/", async (req, res) => {
 // GET /api/lists/:id - Get a single list
 router.get("/:id", async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (!isObjectId(req.params.id)) {
       return res.status(400).json({ error: "Invalid list id" });
     }
 
@@ -125,7 +126,7 @@ router.get("/:id", async (req, res) => {
 router.delete("/:id", verifyToken, async (req, res) => {
   try {
     const listId = req.params.id;
-    if (!mongoose.Types.ObjectId.isValid(listId)) {
+    if (!isObjectId(listId)) {
       return res.status(400).json({ error: "Invalid list id" });
     }
     const userId = req.user._id;
@@ -158,7 +159,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
 // GET /api/lists/:id/comments
 router.get("/:id/comments", async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (!isObjectId(req.params.id)) {
       return res.status(400).json({ error: "Invalid list id" });
     }
 
@@ -204,7 +205,7 @@ router.post(
   requireCanPublish,
   async (req, res) => {
     try {
-      if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      if (!isObjectId(req.params.id)) {
         return res.status(400).json({ error: "Invalid list id" });
       }
 
@@ -279,7 +280,7 @@ router.post(
 
 router.post("/:id/like", verifyToken, async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (!isObjectId(req.params.id)) {
       return res.status(400).json({ error: "Invalid list id" });
     }
 
@@ -313,7 +314,7 @@ router.post("/:id/like", verifyToken, async (req, res) => {
 
 router.post("/:id/dislike", verifyToken, async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (!isObjectId(req.params.id)) {
       return res.status(400).json({ error: "Invalid list id" });
     }
 

@@ -51,6 +51,19 @@ describe("Request validators", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("validateSessionCreate rejects past scheduledAt", () => {
+    const result = validateSessionCreate({
+      game: { appId: 42, name: "Juego" },
+      date: "2020-12-10",
+      time: "20:00",
+      scheduledAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      participants: [{ steamId: validSteamId, username: "Amigo" }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((error) => error.code === "in_past")).toBe(true);
+  });
+
   it("validateModerationAction rejects invalid payload", () => {
     const result = validateModerationAction({
       userId: "bad",
@@ -58,6 +71,28 @@ describe("Request validators", () => {
       reason: "",
     });
     expect(result.ok).toBe(false);
+  });
+
+  it("validateModerationAction accepts duration and rejects invalid duration", () => {
+    const validResult = validateModerationAction({
+      userId: objectId,
+      action: "banned",
+      reason: "Spam",
+      duration: 7,
+    });
+    expect(validResult.ok).toBe(true);
+    expect(validResult.value.duration).toBe(7);
+
+    const invalidResult = validateModerationAction({
+      userId: objectId,
+      action: "banned",
+      reason: "Spam",
+      duration: 0,
+    });
+    expect(invalidResult.ok).toBe(false);
+    expect(
+      invalidResult.errors.some((error) => error.field === "duration"),
+    ).toBe(true);
   });
 
   it("validateReportCreate accepts valid payload", () => {
@@ -84,9 +119,30 @@ describe("Request validators", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("validatePriceAlertUpdate accepts enabled-only payload", () => {
+    const result = validatePriceAlertUpdate({ enabled: false });
+    expect(result.ok).toBe(true);
+    expect(result.value.enabled).toBe(false);
+  });
+
   it("validatePriceAlertUpdate requires payload", () => {
     const result = validatePriceAlertUpdate({});
     expect(result.ok).toBe(false);
+  });
+
+  it("validateSteamIdsPayload flags invalid ids outside test env", () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+
+    try {
+      const result = validateSteamIdsPayload(["bad-id"], { min: 1, max: 6 });
+      expect(result.ok).toBe(false);
+      expect(result.errors.some((error) => error.code === "invalid")).toBe(
+        true,
+      );
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
   });
 
   it("validateSteamIdsPayload accepts valid ids", () => {

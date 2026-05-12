@@ -12,6 +12,7 @@ import mongoose from "mongoose";
 import {
   validateModerationAction,
   validateModerationReportResolution,
+  isObjectId,
 } from "../validation/validators.js";
 
 const router = express.Router();
@@ -255,7 +256,7 @@ router.delete(
     try {
       const { type, id } = req.params;
 
-      if (!mongoose.Types.ObjectId.isValid(id)) {
+      if (!isObjectId(id)) {
         return res.status(400).json({ error: "Invalid content id" });
       }
 
@@ -353,7 +354,7 @@ router.delete(
 // PUT /api/moderation/reports/:id - Resolver reporte (admin only)
 router.put("/reports/:id", verifyToken, requireAdmin, async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (!isObjectId(req.params.id)) {
       return res.status(400).json({ error: "Invalid report id" });
     }
 
@@ -686,7 +687,7 @@ router.post("/actions", verifyToken, requireAdmin, async (req, res) => {
 // GET /api/moderation/user/:userId - Historial de moderación
 router.get("/user/:userId", verifyToken, requireAdmin, async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
+    if (!isObjectId(req.params.userId)) {
       return res.status(400).json({ error: "Invalid user id" });
     }
 
@@ -712,7 +713,7 @@ router.get(
   requireAdmin,
   async (req, res) => {
     try {
-      if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
+      if (!isObjectId(req.params.userId)) {
         return res.status(400).json({ error: "Invalid user id" });
       }
 
