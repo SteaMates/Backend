@@ -1,3 +1,8 @@
+/**
+ * Nombre del fichero: steam.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import express from "express";
 import * as cheerio from "cheerio";
 import GameCache from "../models/GameCache.js";
@@ -8,18 +13,36 @@ import { validateSteamIdsPayload } from "../validation/validators.js";
 const router = express.Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
 
+/**
+ * Función: getItadApiKey
+ * Descripción: Función encargada de consultar y obtener los datos de itad api key. Procesa
+ * los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 function getItadApiKey() {
   const key = process.env.ITAD_API_KEY || process.env.ISTHEREANYDEAL_API_KEY;
   if (!key || key === "your_itad_api_key_here") return null;
   return key;
 }
 
+/**
+ * Función: getSteamApiKey
+ * Descripción: Función encargada de consultar y obtener los datos de steam api key. Procesa
+ * los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 function getSteamApiKey() {
   const key = process.env.STEAM_API_KEY;
   if (!key || key === "your_steam_api_key_here") return null;
   return key;
 }
 
+/**
+ * Función: fetchOwnedGames
+ * Descripción: Operación asíncrona dedicada a recuperar la información de owned games desde
+ * el servidor o API remota. Gestiona la petición HTTP, maneja los posibles
+ * errores de red y retorna los datos obtenidos tras su procesamiento.
+ */
 async function fetchOwnedGames(steamId) {
   const apiKey = getSteamApiKey();
   if (!apiKey) return [];
@@ -31,6 +54,12 @@ async function fetchOwnedGames(steamId) {
   return data.response?.games || [];
 }
 
+/**
+ * Función: firstDefined
+ * Descripción: Función auxiliar de propósito general especializada en first defined.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function firstDefined(...values) {
   for (const value of values) {
     if (value !== undefined && value !== null) return value;
@@ -38,6 +67,12 @@ function firstDefined(...values) {
   return null;
 }
 
+/**
+ * Función: toTimestampMs
+ * Descripción: Función auxiliar de propósito general especializada en to timestamp ms.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function toTimestampMs(raw) {
   if (raw === undefined || raw === null) return null;
 
@@ -53,6 +88,12 @@ function toTimestampMs(raw) {
   return n > 1_000_000_000_000 ? Math.floor(n) : Math.floor(n * 1000);
 }
 
+/**
+ * Función: toNumericPrice
+ * Descripción: Función auxiliar de propósito general especializada en to numeric price.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function toNumericPrice(raw) {
   if (raw === undefined || raw === null) return null;
   if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
@@ -67,6 +108,12 @@ function toNumericPrice(raw) {
   return null;
 }
 
+/**
+ * Función: extractItadGameId
+ * Descripción: Función auxiliar de propósito general especializada en extract itad game id.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function extractItadGameId(payload) {
   if (!payload) return null;
 
@@ -106,6 +153,12 @@ function extractItadGameId(payload) {
   return null;
 }
 
+/**
+ * Función: normalizeItadHistory
+ * Descripción: Función auxiliar de propósito general especializada en normalize itad
+ * history. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function normalizeItadHistory(payload) {
   if (!payload || typeof payload !== "object") return [];
 

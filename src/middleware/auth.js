@@ -1,8 +1,19 @@
+/**
+ * Nombre del fichero: auth.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
 const JWT_SECRET = process.env.SESSION_SECRET || 'steamates-secret-key';
 
+/**
+ * Función: verifyToken
+ * Descripción: Función auxiliar de propósito general especializada en verify token. Contiene
+ * lógica específica para transformar datos, realizar cálculos o conectar
+ * diferentes partes del sistema según los requisitos del módulo.
+ */
 export const verifyToken = async (req, res, next) => {
   try {
     // Expected header: "Authorization: Bearer <token>"

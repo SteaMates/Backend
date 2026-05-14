@@ -1,3 +1,8 @@
+/**
+ * Nombre del fichero: auth.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import express from "express";
 import passport from 'passport';
 import jwt from 'jsonwebtoken';
@@ -8,6 +13,12 @@ const router = express.Router();
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 const JWT_SECRET = process.env.SESSION_SECRET || 'steamates-secret-key';
 
+/**
+ * Función: getActiveWarningReason
+ * Descripción: Función encargada de consultar y obtener los datos de active warning reason.
+ * Procesa los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 async function getActiveWarningReason(userId) {
   const now = new Date();
   const activeWarning = await ModerationAction.findOne({
@@ -22,6 +33,13 @@ async function getActiveWarningReason(userId) {
   return activeWarning?.reason || '';
 }
 
+/**
+ * Función: getActiveModerationNotices
+ * Descripción: Función encargada de consultar y obtener los datos de active moderation
+ * notices. Procesa los parámetros de entrada requeridos, realiza la llamada
+ * pertinente y devuelve la información estructurada para que la aplicación
+ * pueda utilizarla.
+ */
 async function getActiveModerationNotices(userId) {
   const now = new Date();
 
@@ -41,6 +59,12 @@ async function getActiveModerationNotices(userId) {
   }));
 }
 
+/**
+ * Función: getActiveBanReason
+ * Descripción: Función encargada de consultar y obtener los datos de active ban reason.
+ * Procesa los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 async function getActiveBanReason(userId) {
   const now = new Date();
   const activeBan = await ModerationAction.findOne({
@@ -104,7 +128,13 @@ router.get('/steam/callback',
 
 // GET /api/auth/me - Get current user session via JWT Token
 router.get('/me', verifyToken, (req, res) => {
-  const buildResponse = async () => {
+  /**
+                 * Función: buildResponse
+         * Descripción: Función auxiliar de propósito general especializada en build response.
+         * Contiene lógica específica para transformar datos, realizar cálculos o
+         * conectar diferentes partes del sistema según los requisitos del módulo.
+                 */
+    const buildResponse = async () => {
     if (req.user.status === 'banned') {
       const banReason = await getActiveBanReason(req.user._id);
       return res.status(403).json({

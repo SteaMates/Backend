@@ -1,7 +1,19 @@
+/**
+ * Nombre del fichero: passport.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import passport from 'passport';
 import SteamStrategy from 'passport-steam';
 import User from '../models/User.js';
 
+/**
+ * Función: configureSteamStrategy
+ * Descripción: Función auxiliar de propósito general especializada en configure steam
+ * strategy. Contiene lógica específica para transformar datos, realizar
+ * cálculos o conectar diferentes partes del sistema según los requisitos del
+ * módulo.
+ */
 export function configureSteamStrategy() {
   passport.serializeUser((user, done) => {
     done(null, user._id);

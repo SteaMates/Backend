@@ -1,3 +1,8 @@
+/**
+ * Nombre del fichero: chat.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import express from "express";
 import Groq from 'groq-sdk';
 import ChatSession from '../models/ChatSession.js';
@@ -37,6 +42,12 @@ Formato de respuesta:
 - Para cada juego recomendado, explica en una frase por qué encaja con el usuario
 - Evita respuestas largas, repetitivas o demasiado genéricas`;
 
+/**
+ * Función: getGroqClient
+ * Descripción: Función encargada de consultar y obtener los datos de groq client. Procesa
+ * los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 function getGroqClient() {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey || apiKey === 'your_groq_api_key_here') {
@@ -47,6 +58,12 @@ function getGroqClient() {
   return new Groq({ apiKey, baseURL });
 }
 
+/**
+ * Función: getSteamApiKey
+ * Descripción: Función encargada de consultar y obtener los datos de steam api key. Procesa
+ * los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 function getSteamApiKey() {
   const key = process.env.STEAM_API_KEY;
   if (!key || key === 'your_steam_api_key_here') return null;
@@ -54,6 +71,12 @@ function getSteamApiKey() {
 }
 
 // Fetch Steam data for a user to build AI context
+/**
+ * Función: fetchSteamContext
+ * Descripción: Operación asíncrona dedicada a recuperar la información de steam context
+ * desde el servidor o API remota. Gestiona la petición HTTP, maneja los
+ * posibles errores de red y retorna los datos obtenidos tras su procesamiento.
+ */
 async function fetchSteamContext(steamId) {
   const apiKey = getSteamApiKey();
   if (!apiKey || !steamId) return null;
@@ -106,6 +129,12 @@ async function fetchSteamContext(steamId) {
 }
 
 // Build a context string from Steam data
+/**
+ * Función: buildSteamContextPrompt
+ * Descripción: Función auxiliar de propósito general especializada en build steam context
+ * prompt. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function buildSteamContextPrompt(data) {
   if (!data) return '';
 
@@ -159,6 +188,12 @@ function buildSteamContextPrompt(data) {
 const steamContextCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
 
+/**
+ * Función: getSteamContextCached
+ * Descripción: Función encargada de consultar y obtener los datos de steam context cached.
+ * Procesa los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 async function getSteamContextCached(steamId) {
   if (!steamId) return null;
   
@@ -174,11 +209,24 @@ async function getSteamContextCached(steamId) {
   return data;
 }
 
+/**
+ * Función: parseRecommendationResponse
+ * Descripción: Función auxiliar de propósito general especializada en parse recommendation
+ * response. Contiene lógica específica para transformar datos, realizar
+ * cálculos o conectar diferentes partes del sistema según los requisitos del
+ * módulo.
+ */
 function parseRecommendationResponse(rawText) {
   if (!rawText || typeof rawText !== 'string') return [];
 
   const clean = rawText.replace(/```json|```/gi, '').trim();
-  const tryParse = (text) => {
+  /**
+                 * Función: tryParse
+         * Descripción: Función auxiliar de propósito general especializada en try parse.
+         * Contiene lógica específica para transformar datos, realizar cálculos o
+         * conectar diferentes partes del sistema según los requisitos del módulo.
+                 */
+    const tryParse = (text) => {
     try {
       return JSON.parse(text);
     } catch {
@@ -211,6 +259,12 @@ function parseRecommendationResponse(rawText) {
     .slice(0, 12);
 }
 
+/**
+ * Función: pickBestCheapSharkDeal
+ * Descripción: Función auxiliar de propósito general especializada en pick best cheap shark
+ * deal. Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function pickBestCheapSharkDeal(rawDeals) {
   if (!Array.isArray(rawDeals) || rawDeals.length === 0) return null;
 

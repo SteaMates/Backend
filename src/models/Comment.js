@@ -1,3 +1,8 @@
+/**
+ * Nombre del fichero: Comment.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import mongoose from 'mongoose';
 
 const commentSchema = new mongoose.Schema({

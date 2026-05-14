@@ -1,3 +1,8 @@
+/**
+ * Nombre del fichero: Admin.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import mongoose from 'mongoose';
 
 const adminSchema = new mongoose.Schema({

@@ -1,3 +1,8 @@
+/**
+ * Nombre del fichero: validators.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import mongoose from "mongoose";
 
 const STEAM_ID_REGEX = /^\d{17}$/;
@@ -24,16 +29,34 @@ const REPORT_ALLOWED_REASONS = [
   "Se hace pasar por otra persona",
 ];
 
+/**
+ * Función: trimValue
+ * Descripción: Función auxiliar de propósito general especializada en trim value. Contiene
+ * lógica específica para transformar datos, realizar cálculos o conectar
+ * diferentes partes del sistema según los requisitos del módulo.
+ */
 const trimValue = (value) => {
   if (value === null || value === undefined) return "";
   return String(value).trim();
 };
 
+/**
+ * Función: toNumber
+ * Descripción: Función auxiliar de propósito general especializada en to number. Contiene
+ * lógica específica para transformar datos, realizar cálculos o conectar
+ * diferentes partes del sistema según los requisitos del módulo.
+ */
 const toNumber = (value) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 };
 
+/**
+ * Función: isObjectId
+ * Descripción: Función de validación o comprobación booleana sobre object id. Evalúa las
+ * condiciones de negocio actuales y devuelve verdadero o falso dependiendo del
+ * estado de la entidad solicitada.
+ */
 export const isObjectId = (value) => {
   const s = String(value || "");
   if (process.env.NODE_ENV === "test") {
@@ -42,16 +65,34 @@ export const isObjectId = (value) => {
   return mongoose.Types.ObjectId.isValid(s);
 };
 
+/**
+ * Función: addError
+ * Descripción: Función que inicializa o registra un nuevo elemento para error. Recibe los
+ * datos base, ejecuta las validaciones de integridad y persiste la nueva
+ * entidad en la base de datos o estructura correspondiente.
+ */
 const addError = (errors, field, code, message) => {
   errors.push({ field, code, message });
 };
 
+/**
+ * Función: buildResult
+ * Descripción: Función auxiliar de propósito general especializada en build result. Contiene
+ * lógica específica para transformar datos, realizar cálculos o conectar
+ * diferentes partes del sistema según los requisitos del módulo.
+ */
 const buildResult = (errors, value) => ({
   ok: errors.length === 0,
   errors,
   value,
 });
 
+/**
+ * Función: validateListCreate
+ * Descripción: Función auxiliar de propósito general especializada en validate list create.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 export function validateListCreate(body) {
   const errors = [];
 
@@ -150,6 +191,12 @@ export function validateListCreate(body) {
   });
 }
 
+/**
+ * Función: validateCommentCreate
+ * Descripción: Función auxiliar de propósito general especializada en validate comment
+ * create. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 export function validateCommentCreate(body) {
   const errors = [];
   const content = trimValue(body?.content);
@@ -171,6 +218,12 @@ export function validateCommentCreate(body) {
   return buildResult(errors, { content, parentId: parentId || null });
 }
 
+/**
+ * Función: validateSessionCreate
+ * Descripción: Función auxiliar de propósito general especializada en validate session
+ * create. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 export function validateSessionCreate(body) {
   const errors = [];
   const game = body?.game || {};
@@ -262,6 +315,12 @@ export function validateSessionCreate(body) {
   });
 }
 
+/**
+ * Función: validateReportCreate
+ * Descripción: Función auxiliar de propósito general especializada en validate report
+ * create. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 export function validateReportCreate(body) {
   const errors = [];
   const targetId = trimValue(body?.targetId);
@@ -299,6 +358,12 @@ export function validateReportCreate(body) {
   });
 }
 
+/**
+ * Función: validateModerationAction
+ * Descripción: Función auxiliar de propósito general especializada en validate moderation
+ * action. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 export function validateModerationAction(body) {
   const errors = [];
   const userId = trimValue(body?.userId);
@@ -345,6 +410,13 @@ export function validateModerationAction(body) {
   return buildResult(errors, { userId, action, reason, duration });
 }
 
+/**
+ * Función: validateModerationReportResolution
+ * Descripción: Función auxiliar de propósito general especializada en validate moderation
+ * report resolution. Contiene lógica específica para transformar datos,
+ * realizar cálculos o conectar diferentes partes del sistema según los
+ * requisitos del módulo.
+ */
 export function validateModerationReportResolution(body) {
   const errors = [];
   const status = trimValue(body?.status);
@@ -366,6 +438,12 @@ export function validateModerationReportResolution(body) {
   return buildResult(errors, { status, resolution });
 }
 
+/**
+ * Función: validateWishlistCreate
+ * Descripción: Función auxiliar de propósito general especializada en validate wishlist
+ * create. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 export function validateWishlistCreate(body) {
   const errors = [];
   const steamAppId = trimValue(body?.steamAppId);
@@ -407,6 +485,12 @@ export function validateWishlistCreate(body) {
   return buildResult(errors, { steamAppId, gameId, title, thumb });
 }
 
+/**
+ * Función: validatePriceAlertCreate
+ * Descripción: Función auxiliar de propósito general especializada en validate price alert
+ * create. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 export function validatePriceAlertCreate(body) {
   const errors = [];
   const steamAppId = trimValue(body?.steamAppId);
@@ -450,6 +534,12 @@ export function validatePriceAlertCreate(body) {
   return buildResult(errors, { steamAppId, gameId, title, thumb, targetPrice });
 }
 
+/**
+ * Función: validatePriceAlertUpdate
+ * Descripción: Función auxiliar de propósito general especializada en validate price alert
+ * update. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 export function validatePriceAlertUpdate(body) {
   const errors = [];
   const targetPriceRaw = body?.targetPrice;
@@ -480,6 +570,12 @@ export function validatePriceAlertUpdate(body) {
   return buildResult(errors, { targetPrice, enabled });
 }
 
+/**
+ * Función: validateSteamIdsPayload
+ * Descripción: Función auxiliar de propósito general especializada en validate steam ids
+ * payload. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 export function validateSteamIdsPayload(steamIds, options = {}) {
   const errors = [];
   const min = options.min ?? 1;

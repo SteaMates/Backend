@@ -1,3 +1,10 @@
+/**
+ * Nombre del fichero: moderationStatus.js
+ * Descripción: Función auxiliar de propósito general especializada en require can publish.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 export const requireCanPublish = (req, res, next) => {
   const status = req.user?.status;
 

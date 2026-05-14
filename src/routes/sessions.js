@@ -1,3 +1,8 @@
+/**
+ * Nombre del fichero: sessions.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import express from "express";
 import GamingSession from "../models/GamingSession.js";
 import Notification from "../models/Notification.js";
@@ -9,11 +14,23 @@ const router = express.Router();
 
 const NOTIFICATION_TTL_DAYS = Number(process.env.NOTIFICATIONS_TTL_DAYS || 30);
 
+/**
+ * Función: expiresAtFromNow
+ * Descripción: Función auxiliar de propósito general especializada en expires at from now.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function expiresAtFromNow(days = NOTIFICATION_TTL_DAYS) {
   const ms = Math.max(1, days) * 24 * 60 * 60 * 1000;
   return new Date(Date.now() + ms);
 }
 
+/**
+ * Función: uniqStrings
+ * Descripción: Función auxiliar de propósito general especializada en uniq strings. Contiene
+ * lógica específica para transformar datos, realizar cálculos o conectar
+ * diferentes partes del sistema según los requisitos del módulo.
+ */
 function uniqStrings(arr) {
   return [...new Set((arr || []).filter(Boolean))];
 }

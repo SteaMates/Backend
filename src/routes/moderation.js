@@ -1,3 +1,8 @@
+/**
+ * Nombre del fichero: moderation.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import express from "express";
 import { verifyToken } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/adminAuth.js";
@@ -21,6 +26,12 @@ const router = express.Router();
 const MODERATION_STATUS_PRIORITY = ["banned", "silenced", "warned"];
 
 // Convierte el tipo de acción de moderación al estado que se refleja en el usuario.
+/**
+ * Función: mapActionToUserStatus
+ * Descripción: Función auxiliar de propósito general especializada en map action to user
+ * status. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function mapActionToUserStatus(action) {
   if (action === "banned") return "banned";
   if (action === "silenced") return "silenced";
@@ -29,6 +40,12 @@ function mapActionToUserStatus(action) {
 }
 
 // Recalcula el estado real del usuario en base a sanciones activas y no expiradas.
+/**
+ * Función: recalculateUserStatus
+ * Descripción: Función auxiliar de propósito general especializada en recalculate user
+ * status. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 async function recalculateUserStatus(userId) {
   const now = new Date();
 
@@ -77,6 +94,12 @@ async function recalculateUserStatus(userId) {
 }
 
 // Expira sanciones temporales vencidas y sincroniza estados de los usuarios afectados.
+/**
+ * Función: expireAllModerationActions
+ * Descripción: Función auxiliar de propósito general especializada en expire all moderation
+ * actions. Contiene lógica específica para transformar datos, realizar cálculos
+ * o conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 async function expireAllModerationActions() {
   const now = new Date();
   const expiredActions = await ModerationAction.find({
@@ -531,7 +554,13 @@ router.get("/export", verifyToken, requireAdmin, async (req, res) => {
     }
 
     // Default: CSV
-    const escapeCsv = (v) => {
+    /**
+                         * Función: escapeCsv
+             * Descripción: Función auxiliar de propósito general especializada en escape csv.
+             * Contiene lógica específica para transformar datos, realizar cálculos o
+             * conectar diferentes partes del sistema según los requisitos del módulo.
+                         */
+      const escapeCsv = (v) => {
       if (v === null || v === undefined) return "";
       const s = String(v);
       if (s.includes(",") || s.includes("\n") || s.includes('"')) {
@@ -785,7 +814,14 @@ router.get(
         return;
       }
 
-      const escapeCsv = (value) => {
+      /**
+                                 * Función: escapeCsv
+                 * Descripción: Función auxiliar de propósito general especializada en escape csv.
+                 * Contiene lógica específica para transformar datos, realizar cálculos
+                 * o conectar diferentes partes del sistema según los requisitos del
+                 * módulo.
+                                 */
+        const escapeCsv = (value) => {
         if (value === null || value === undefined) return "";
         const text = String(value);
         if (text.includes(",") || text.includes("\n") || text.includes('"')) {

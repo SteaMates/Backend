@@ -1,3 +1,8 @@
+/**
+ * Nombre del fichero: stats.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import express from "express";
 import GameCache from "../models/GameCache.js";
 import { verifyToken } from "../middleware/auth.js";
@@ -7,6 +12,12 @@ const router = express.Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
 const STORE_API_BASE = "https://store.steampowered.com/api";
 
+/**
+ * Función: getSteamApiKey
+ * Descripción: Función encargada de consultar y obtener los datos de steam api key. Procesa
+ * los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 function getSteamApiKey() {
   const key = process.env.STEAM_API_KEY;
   if (!key || key === "your_steam_api_key_here") return null;
@@ -14,6 +25,12 @@ function getSteamApiKey() {
 }
 
 // Helper: fetch game genres from Steam Store API, with MongoDB cache
+/**
+ * Función: getGameGenres
+ * Descripción: Función encargada de consultar y obtener los datos de game genres. Procesa
+ * los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 async function getGameGenres(appId) {
   // Check cache first
   const cached = await GameCache.findOne({ appId });
@@ -56,6 +73,12 @@ async function getGameGenres(appId) {
 }
 
 // Helper: fetch owned games for a steamId
+/**
+ * Función: fetchOwnedGames
+ * Descripción: Operación asíncrona dedicada a recuperar la información de owned games desde
+ * el servidor o API remota. Gestiona la petición HTTP, maneja los posibles
+ * errores de red y retorna los datos obtenidos tras su procesamiento.
+ */
 async function fetchOwnedGames(steamId) {
   const apiKey = getSteamApiKey();
   if (!apiKey) return [];
@@ -67,11 +90,24 @@ async function fetchOwnedGames(steamId) {
   return data.response?.games || [];
 }
 
+/**
+ * Función: round
+ * Descripción: Función auxiliar de propósito general especializada en round. Contiene lógica
+ * específica para transformar datos, realizar cálculos o conectar diferentes
+ * partes del sistema según los requisitos del módulo.
+ */
 function round(value, decimals = 1) {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
 }
 
+/**
+ * Función: getOwnedGamesWithCacheValue
+ * Descripción: Función encargada de consultar y obtener los datos de owned games with cache
+ * value. Procesa los parámetros de entrada requeridos, realiza la llamada
+ * pertinente y devuelve la información estructurada para que la aplicación
+ * pueda utilizarla.
+ */
 async function getOwnedGamesWithCacheValue(steamId) {
   const games = await fetchOwnedGames(steamId);
 
@@ -155,6 +191,12 @@ async function getOwnedGamesWithCacheValue(steamId) {
   };
 }
 
+/**
+ * Función: getAchievementSummary
+ * Descripción: Función encargada de consultar y obtener los datos de achievement summary.
+ * Procesa los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 async function getAchievementSummary(steamId, ownedGames) {
   if (!ownedGames || ownedGames.length === 0) {
     return {
@@ -246,6 +288,12 @@ async function getAchievementSummary(steamId, ownedGames) {
   };
 }
 
+/**
+ * Función: buildRadarMetrics
+ * Descripción: Función auxiliar de propósito general especializada en build radar metrics.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function buildRadarMetrics({ economy, time, achievements }) {
   const volumenRaw = economy.totalGames;
   const dedicacionRaw = time.totalHours;
@@ -264,6 +312,12 @@ function buildRadarMetrics({ economy, time, achievements }) {
   };
 }
 
+/**
+ * Función: scaleRadarScores
+ * Descripción: Función auxiliar de propósito general especializada en scale radar scores.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function scaleRadarScores(players) {
   const axes = [
     "volumen",
@@ -297,6 +351,12 @@ function scaleRadarScores(players) {
   return players;
 }
 
+/**
+ * Función: getRadarArchetype
+ * Descripción: Función encargada de consultar y obtener los datos de radar archetype.
+ * Procesa los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 function getRadarArchetype(scores) {
   const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
   const topAxis = entries[0]?.[0];

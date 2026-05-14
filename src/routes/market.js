@@ -1,3 +1,8 @@
+/**
+ * Nombre del fichero: market.js
+ * Descripción: Fichero fuente de la aplicación SteaMates.
+ * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
+ */
 import express from "express";
 
 import { randomUUID } from "crypto";
@@ -19,30 +24,66 @@ const CHEAPSHARK_HEADERS = {
 };
 const NOTIFICATION_TTL_DAYS = Number(process.env.NOTIFICATIONS_TTL_DAYS || 30);
 
+/**
+ * Función: expiresAtFromNow
+ * Descripción: Función auxiliar de propósito general especializada en expires at from now.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function expiresAtFromNow(days = NOTIFICATION_TTL_DAYS) {
   const ms = Math.max(1, days) * 24 * 60 * 60 * 1000;
   return new Date(Date.now() + ms);
 }
 
+/**
+ * Función: normalizeText
+ * Descripción: Función auxiliar de propósito general especializada en normalize text.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function normalizeText(value) {
   return String(value || "").trim();
 }
 
+/**
+ * Función: toNumber
+ * Descripción: Función auxiliar de propósito general especializada en to number. Contiene
+ * lógica específica para transformar datos, realizar cálculos o conectar
+ * diferentes partes del sistema según los requisitos del módulo.
+ */
 function toNumber(value) {
   const parsed = Number.parseFloat(String(value ?? ""));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * Función: formatUsd
+ * Descripción: Función auxiliar de propósito general especializada en format usd. Contiene
+ * lógica específica para transformar datos, realizar cálculos o conectar
+ * diferentes partes del sistema según los requisitos del módulo.
+ */
 function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+/**
+ * Función: createTrackingId
+ * Descripción: Función que inicializa o registra un nuevo elemento para tracking id. Recibe
+ * los datos base, ejecuta las validaciones de integridad y persiste la nueva
+ * entidad en la base de datos o estructura correspondiente.
+ */
 function createTrackingId() {
   return typeof randomUUID === "function"
     ? randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * Función: ensureTrackingIds
+ * Descripción: Función auxiliar de propósito general especializada en ensure tracking ids.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function ensureTrackingIds(userDoc) {
   let changed = false;
 
@@ -63,10 +104,22 @@ function ensureTrackingIds(userDoc) {
   return changed;
 }
 
+/**
+ * Función: getIdentityMatches
+ * Descripción: Función encargada de consultar y obtener los datos de identity matches.
+ * Procesa los parámetros de entrada requeridos, realiza la llamada pertinente y
+ * devuelve la información estructurada para que la aplicación pueda utilizarla.
+ */
 function getIdentityMatches(item, id) {
   return item?.id === id || item?.steamAppId === id || item?.gameId === id;
 }
 
+/**
+ * Función: findDealIdentity
+ * Descripción: Función auxiliar de propósito general especializada en find deal identity.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function findDealIdentity(item) {
   return (
     normalizeText(item?.id) ||
@@ -76,6 +129,12 @@ function findDealIdentity(item) {
   );
 }
 
+/**
+ * Función: isAlertTriggered
+ * Descripción: Función de validación o comprobación booleana sobre alert triggered. Evalúa
+ * las condiciones de negocio actuales y devuelve verdadero o falso dependiendo
+ * del estado de la entidad solicitada.
+ */
 function isAlertTriggered(alert, currentPrice) {
   const targetPrice = toNumber(alert?.targetPrice);
   return Boolean(
@@ -86,6 +145,13 @@ function isAlertTriggered(alert, currentPrice) {
   );
 }
 
+/**
+ * Función: buildPriceAlertNotification
+ * Descripción: Función auxiliar de propósito general especializada en build price alert
+ * notification. Contiene lógica específica para transformar datos, realizar
+ * cálculos o conectar diferentes partes del sistema según los requisitos del
+ * módulo.
+ */
 function buildPriceAlertNotification({
   recipientId,
   alert,
@@ -112,6 +178,12 @@ function buildPriceAlertNotification({
   };
 }
 
+/**
+ * Función: mapDeal
+ * Descripción: Función auxiliar de propósito general especializada en map deal. Contiene
+ * lógica específica para transformar datos, realizar cálculos o conectar
+ * diferentes partes del sistema según los requisitos del módulo.
+ */
 function mapDeal(deal) {
   if (!deal) return null;
   return {
@@ -128,6 +200,12 @@ function mapDeal(deal) {
   };
 }
 
+/**
+ * Función: fetchCurrentDealForItem
+ * Descripción: Operación asíncrona dedicada a recuperar la información de current deal for
+ * item desde el servidor o API remota. Gestiona la petición HTTP, maneja los
+ * posibles errores de red y retorna los datos obtenidos tras su procesamiento.
+ */
 async function fetchCurrentDealForItem(item) {
   const steamAppId = normalizeText(item?.steamAppId);
   const title = normalizeText(item?.title);
@@ -228,6 +306,12 @@ async function fetchCurrentDealForItem(item) {
   return null;
 }
 
+/**
+ * Función: enrichWithLiveData
+ * Descripción: Función auxiliar de propósito general especializada en enrich with live data.
+ * Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 function enrichWithLiveData(items, liveDataMap) {
   return items.map((item) => {
     const identity = findDealIdentity(item);
@@ -249,6 +333,12 @@ function enrichWithLiveData(items, liveDataMap) {
   });
 }
 
+/**
+ * Función: maybeNotifyTriggeredAlert
+ * Descripción: Función auxiliar de propósito general especializada en maybe notify triggered
+ * alert. Contiene lógica específica para transformar datos, realizar cálculos o
+ * conectar diferentes partes del sistema según los requisitos del módulo.
+ */
 async function maybeNotifyTriggeredAlert(userDoc, alertIndex) {
   const alert = userDoc?.priceAlerts?.[alertIndex];
   if (!alert || !alert.enabled) return false;
