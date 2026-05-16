@@ -37,30 +37,29 @@ const PORT = process.env.PORT || 3001;
 
 // ---------------------------------------------------------------------------
 // Rate limiting — sin dependencias externas, almacenamiento en memoria
-// Límite general: 200 req / 15 min por IP
-// Límite estricto (auth, chat): 30 req / 15 min por IP
+//   generalLimiter : 200 req / 15 min por IP  (rutas públicas)
+//   authLimiter    : 30  req / 15 min por IP  (auth)
+//   chatLimiter    : 30  req / 1  min por IP  (chat/Groq — límite real de Groq)
 // ---------------------------------------------------------------------------
-const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 minutos
-
-function buildRateLimiter({ max = 200 } = {}) {
+function buildRateLimiter({ windowMs = 15 * 60 * 1000, max = 200 } = {}) {
   const hits = new Map();
 
-  // Limpiar entradas caducadas cada 5 minutos para no acumular memoria
+  // Limpiar entradas caducadas periódicamente para no acumular memoria
   setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of hits) {
-      if (now - entry.start > RATE_WINDOW_MS) hits.delete(key);
+      if (now - entry.start > windowMs) hits.delete(key);
     }
-  }, 5 * 60 * 1000).unref();
+  }, Math.min(windowMs, 5 * 60 * 1000)).unref();
 
   return (req, res, next) => {
-    if (process.env.NODE_ENV === 'test') return next(); // no aplicar en tests
+    if (process.env.NODE_ENV === 'test') return next();
 
     const key = req.ip;
     const now = Date.now();
     const entry = hits.get(key);
 
-    if (!entry || now - entry.start > RATE_WINDOW_MS) {
+    if (!entry || now - entry.start > windowMs) {
       hits.set(key, { start: now, count: 1 });
       return next();
     }
@@ -68,7 +67,7 @@ function buildRateLimiter({ max = 200 } = {}) {
     entry.count += 1;
 
     if (entry.count > max) {
-      res.set('Retry-After', Math.ceil((entry.start + RATE_WINDOW_MS - now) / 1000));
+      res.set('Retry-After', Math.ceil((entry.start + windowMs - now) / 1000));
       return res.status(429).json({ error: 'Demasiadas peticiones. Inténtalo más tarde.' });
     }
 
@@ -76,8 +75,9 @@ function buildRateLimiter({ max = 200 } = {}) {
   };
 }
 
-const generalLimiter = buildRateLimiter({ max: 200 });
-const strictLimiter  = buildRateLimiter({ max: 30 });
+const generalLimiter = buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 200 });
+const authLimiter    = buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 30  });
+const chatLimiter    = buildRateLimiter({ windowMs:      60 * 1000, max: 30  }); // Groq: 30 req/min
 
 // Connect to MongoDB (SOLO SI NO ESTAMOS EN TESTS)
 if (process.env.NODE_ENV !== 'test') {
@@ -135,8 +135,8 @@ app.use(passport.session());
 // Ambos prefijos apuntan a los mismos routers para compatibilidad.
 // ---------------------------------------------------------------------------
 function registerRoutes(prefix) {
-  app.use(`${prefix}/auth`,          strictLimiter,  authRoutes);
-  app.use(`${prefix}/chat`,          strictLimiter,  chatRoutes);
+  app.use(`${prefix}/auth`,          authLimiter,  authRoutes);
+  app.use(`${prefix}/chat`,          chatLimiter,  chatRoutes);
   app.use(`${prefix}/steam/stats`,   generalLimiter, statsRoutes);
   app.use(`${prefix}/steam`,         generalLimiter, steamRoutes);
   app.use(`${prefix}/lists`,         generalLimiter, listsRoutes);
