@@ -189,6 +189,52 @@ function buildSteamContextPrompt(data) {
 const steamContextCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
 
+// ---------------------------------------------------------------------------
+// Rate limit por usuario en el chat:
+//   - 5 consultas por ventana de 1 minuto
+//   - La 1ª usa llama-3.3-70b-versatile, las 4 siguientes llama-4-scout-17b
+//   - Al superar el límite se devuelve 429 con la hora exacta de fin de cooldown
+// ---------------------------------------------------------------------------
+const CHAT_WINDOW_MS   = 60 * 1000; // 1 minuto
+const CHAT_MAX         = 5;
+
+const userChatWindows = new Map();
+
+// Limpiar entradas caducadas cada minuto
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of userChatWindows) {
+    if (now - entry.start >= CHAT_WINDOW_MS) userChatWindows.delete(key);
+  }
+}, CHAT_WINDOW_MS).unref();
+
+/**
+ * Devuelve la entrada de ventana del usuario (crea una nueva si ha expirado).
+ */
+function getUserChatWindow(userId) {
+  const now   = Date.now();
+  const entry = userChatWindows.get(userId);
+  if (!entry || now - entry.start >= CHAT_WINDOW_MS) {
+    const fresh = { start: now, count: 0 };
+    userChatWindows.set(userId, fresh);
+    return fresh;
+  }
+  return entry;
+}
+
+/**
+ * Selecciona el modelo en función del número de consulta en la ventana actual.
+ * Primera consulta → versatile. Resto → scout (más barato y sin cuota diaria tan baja).
+ * Si hay imagen siempre se usa scout (es el único con visión en Groq).
+ */
+function selectModel(windowCount, hasVision, isOpenRouter) {
+  if (hasVision) return 'meta-llama/llama-4-scout-17b-16e-instruct';
+  if (windowCount === 0) {
+    return isOpenRouter ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile';
+  }
+  return 'meta-llama/llama-4-scout-17b-16e-instruct';
+}
+
 /**
  * Función: getSteamContextCached
  * Descripción: Función encargada de consultar y obtener los datos de steam context cached.
@@ -440,15 +486,26 @@ router.post('/message', verifyToken, async (req, res) => {
 
     const baseURL = groq.opts?.baseURL || '';
     const isOpenRouter = baseURL.includes('openrouter.ai');
-    
-    // Determine which model to use based on whether we have an image
     const hasVision = !!image;
-    
-    let model = isOpenRouter ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'meta-llama/llama-4-scout-17b-16e-instruct';
-    if (hasVision) {
-      // Llama 4 Scout es el único modelo de Groq con soporte de visión actualmente disponible
-      model = isOpenRouter ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'meta-llama/llama-4-scout-17b-16e-instruct';
+
+    // --- Rate limit por usuario ---
+    const uid = req.user?._id?.toString() || req.user?.steamId || 'anon';
+    const chatWindow = getUserChatWindow(uid);
+
+    if (chatWindow.count >= CHAT_MAX) {
+      const resetAt  = chatWindow.start + CHAT_WINDOW_MS;
+      const retryAfterSecs = Math.ceil((resetAt - Date.now()) / 1000);
+      const resetTime = new Date(resetAt).toLocaleTimeString('es-ES', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+      return res.status(429).json({
+        error: `Has alcanzado el límite de ${CHAT_MAX} consultas por minuto. Vuelve a intentarlo a las ${resetTime}.`,
+        retryAfter: retryAfterSecs,
+      });
     }
+
+    const model = selectModel(chatWindow.count, hasVision, isOpenRouter);
+    chatWindow.count += 1;
 
     let groqMessages;
 
