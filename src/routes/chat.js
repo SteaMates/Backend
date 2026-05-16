@@ -402,51 +402,55 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
       return res.json({ deals: [] });
     }
 
-    console.log(`[Market] Buscando ofertas para ${recommendations.length} juegos con sistema de reintentos...`);
+    console.log(`[Market] Buscando ofertas en Steam Store para ${recommendations.length} juegos...`);
 
     const seen = new Set();
     const foundDeals = [];
 
-    // Helper para fetch con reintentos para CheapShark
-    async function fetchWithRetry(url, retries = 2, delay = 1500) {
-      for (let i = 0; i <= retries; i++) {
-        const response = await fetch(url);
-        if (response.status === 429) {
-          console.warn(`[Market] CheapShark Rate Limit (429). Reintento ${i+1}/${retries} en ${delay}ms...`);
-          await new Promise(r => setTimeout(r, delay));
-          delay *= 2; // Backoff exponencial
-          continue;
-        }
-        return response;
-      }
-      return { ok: false, status: 429 };
-    }
-
     for (const rec of recommendations) {
-      const url = new URL('https://www.cheapshark.com/api/1.0/deals');
-      url.searchParams.set('title', rec.title);
-      url.searchParams.set('storeID', '1');
-      url.searchParams.set('pageSize', '3');
+      // Usamos la API oficial de búsqueda de la tienda de Steam
+      const url = new URL('https://store.steampowered.com/api/storesearch/');
+      url.searchParams.set('term', rec.title);
+      url.searchParams.set('l', 'spanish');
+      url.searchParams.set('cc', 'ES');
 
       try {
-        const response = await fetchWithRetry(url.toString());
+        const response = await fetch(url.toString());
         if (response.ok) {
-          const rawDeals = await response.json();
-          const bestDeal = pickBestCheapSharkDeal(rawDeals);
-          if (bestDeal && !seen.has(bestDeal.dealID)) {
-            seen.add(bestDeal.dealID);
-            foundDeals.push({ ...bestDeal, reason: rec.reason });
+          const data = await response.json();
+          const item = data.items?.[0]; // Tomamos el primer resultado (el más relevante)
+          
+          if (item && !seen.has(item.id)) {
+            seen.add(item.id);
+            
+            // Calculamos el descuento si existe
+            const initial = item.price?.initial || 0;
+            const final = item.price?.final || 0;
+            const savings = initial > 0 ? Math.round(((initial - final) / initial) * 100) : 0;
+            
+            foundDeals.push({
+              title: item.name,
+              steamAppID: String(item.id),
+              thumb: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${item.id}/header.jpg`,
+              salePrice: final > 0 ? (final / 100).toFixed(2) : "0.00",
+              normalPrice: initial > 0 ? (initial / 100).toFixed(2) : "0.00",
+              savings: String(savings),
+              dealID: `steam_${item.id}`,
+              storeID: "1",
+              reason: rec.reason
+            });
           }
         }
       } catch (err) {
-        console.error(`[Market] Error buscando ${rec.title}:`, err.message);
+        console.error(`[Market] Error buscando en Steam Store para ${rec.title}:`, err.message);
       }
 
       if (foundDeals.length >= maxItems) break;
-      await new Promise(r => setTimeout(r, 800)); // Delay base entre juegos
+      // Pequeño delay de cortesía (aunque Steam es más permisivo que CheapShark)
+      await new Promise(r => setTimeout(r, 200));
     }
 
-    console.log(`[Market] Éxito: ${foundDeals.length} ofertas encontradas para ${steamId}.`);
+    console.log(`[Market] Éxito: ${foundDeals.length} ofertas oficiales de Steam encontradas.`);
     return res.json({ deals: foundDeals });
 
   } catch (error) {
