@@ -324,6 +324,23 @@ router.post("/:id/like", verifyToken, async (req, res) => {
     }
 
     await list.save();
+
+    // Notificar al autor si no es él mismo y si es un nuevo like (no un un-like)
+    if (!liked && list.author.toString() !== userId.toString()) {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      
+      await Notification.create({
+        recipient: list.author,
+        from: userId,
+        type: "list_like",
+        title: "Nuevo Like",
+        message: `A ${req.user.username} le gusta tu lista "${list.title}".`,
+        data: { listId: list._id },
+        expiresAt,
+      });
+    }
+
     res.json({ likes: list.likes, dislikes: list.dislikes });
   } catch (error) {
     console.error("Error toggling like:", error);

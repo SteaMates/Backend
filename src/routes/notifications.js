@@ -80,4 +80,38 @@ router.patch("/read-all", verifyToken, async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/notifications/:id
+ */
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const result = await Notification.deleteOne({
+      _id: req.params.id,
+      recipient: req.user._id,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Delete notification error:", error);
+    return res.status(500).json({ error: "Error deleting notification" });
+  }
+});
+
+/**
+ * DELETE /api/notifications/all
+ */
+router.delete("/all", verifyToken, async (req, res) => {
+  try {
+    await Notification.deleteMany({ recipient: req.user._id });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Delete-all notifications error:", error);
+    return res.status(500).json({ error: "Error deleting notifications" });
+  }
+});
+
 export default router;
