@@ -444,10 +444,10 @@ router.post('/message', verifyToken, async (req, res) => {
     // Determine which model to use based on whether we have an image
     const hasVision = !!image;
     
-    let model = isOpenRouter ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile';
+    let model = isOpenRouter ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'meta-llama/llama-4-scout-17b-16e-instruct';
     if (hasVision) {
-      // Vision models are required for images
-      model = isOpenRouter ? 'meta-llama/llama-3.2-11b-vision-instruct' : 'llama-3.2-11b-vision-preview';
+      // Llama 4 Scout es el único modelo de Groq con soporte de visión actualmente disponible
+      model = isOpenRouter ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'meta-llama/llama-4-scout-17b-16e-instruct';
     }
 
     let groqMessages;
