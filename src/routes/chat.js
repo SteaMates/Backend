@@ -196,7 +196,7 @@ const CACHE_TTL = 5 * 60 * 1000;
 //   - Al superar el límite se devuelve 429 con la hora exacta de fin de cooldown
 // ---------------------------------------------------------------------------
 const CHAT_WINDOW_MS   = 60 * 1000; // 1 minuto
-const CHAT_MAX         = 5;
+const CHAT_MAX         = 3;
 
 const userChatWindows = new Map();
 

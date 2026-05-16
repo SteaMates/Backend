@@ -121,7 +121,7 @@
       "post": {
         "tags": ["Chat"],
         "summary": "Enviar mensaje al chatbot",
-        "description": "Envía un mensaje al asistente de IA. Soporta contexto de Steam, historial de sesión e imágenes.",
+        "description": "Envía un mensaje al asistente de IA. Soporta contexto de Steam, historial de sesión e imágenes. Límite por usuario: 3 consultas/minuto (1ª con Llama 3.3 70B Versatile, 2ª y 3ª con Llama 4 Scout 17B). Las imágenes siempre usan Llama 4 Scout 17B.",
         "parameters": [
           {
             "name": "body",
@@ -146,7 +146,7 @@
           "200": { "description": "Respuesta del asistente" },
           "400": { "description": "Mensaje vacío o inválido" },
           "401": { "description": "No autorizado" },
-          "429": { "description": "Límite de peticiones a Groq superado" },
+          "429": { "description": "Límite de usuario superado (3 consultas/min). La respuesta incluye 'error' con la hora exacta de fin de cooldown y 'retryAfter' en segundos" },
           "500": { "description": "Error interno" },
           "503": { "description": "API de Groq no disponible" }
         }
