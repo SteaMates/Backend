@@ -432,38 +432,117 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
       return res.json({ deals: [] });
     }
 
+    console.log(`[Market] Buscando ofertas en IsThereAnyDeal (ITAD) para ${recommendations.length} juegos...`);
+
+    const itadKey = process.env.ITAD_API_KEY;
     const seen = new Set();
     const foundDeals = [];
 
-    // Fetch recommendations sequentially to avoid CheapShark's strict 1 req/sec rate limit
-    for (const rec of recommendations) {
-      const url = new URL('https://www.cheapshark.com/api/1.0/deals');
-      url.searchParams.set('title', rec.title);
-      url.searchParams.set('storeID', '1');
-      url.searchParams.set('pageSize', '5');
-      url.searchParams.set('sortBy', 'Savings');
-
+    if (itadKey) {
       try {
-        const response = await fetch(url.toString());
-        if (response.ok) {
-          const rawDeals = await response.json();
-          const bestDeal = pickBestCheapSharkDeal(rawDeals);
-          if (bestDeal && !seen.has(bestDeal.dealID)) {
-            seen.add(bestDeal.dealID);
-            foundDeals.push({ ...bestDeal, reason: rec.reason });
+        // 1. Buscamos los IDs de ITAD para cada juego recomendado
+        const idMap = new Map(); // itad_id -> reason
+        await Promise.all(recommendations.map(async (rec) => {
+          try {
+            const searchUrl = `https://api.isthereanydeal.com/games/search/v1?key=${itadKey}&title=${encodeURIComponent(rec.title)}`;
+            const sRes = await fetch(searchUrl);
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              if (sData?.[0]?.id) {
+                idMap.set(sData[0].id, rec.reason);
+              }
+            }
+          } catch (e) {
+            console.error(`[Market] ITAD Search Error para ${rec.title}:`, e.message);
+          }
+        }));
+
+        const itadIds = Array.from(idMap.keys());
+        
+        if (itadIds.length > 0) {
+          // 2. Obtenemos los precios en lote (batch) para esos IDs en USD
+          const overviewUrl = `https://api.isthereanydeal.com/games/overview/v2?key=${itadKey}&country=US`;
+          const pRes = await fetch(overviewUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(itadIds)
+          });
+
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            const prices = pData.prices || [];
+
+            for (const item of prices) {
+              const deal = item.current;
+              if (deal && deal.price) {
+                const steamIdMatch = deal.url.match(/\/app\/(\d+)/);
+                const steamAppId = steamIdMatch ? steamIdMatch[1] : "";
+                
+                foundDeals.push({
+                  title: item.title || deal.shop.name,
+                  steamAppID: steamAppId,
+                  thumb: steamAppId 
+                    ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${steamAppId}/header.jpg`
+                    : `https://placehold.co/460x215/1e293b/94a3b8?text=${encodeURIComponent(item.title || "Game")}`,
+                  salePrice: deal.price.amount.toFixed(2),
+                  normalPrice: deal.regular ? deal.regular.amount.toFixed(2) : deal.price.amount.toFixed(2),
+                  savings: String(deal.cut || 0),
+                  dealID: `itad_${item.id}`,
+                  storeID: String(deal.shop.id),
+                  reason: idMap.get(item.id)
+                });
+                seen.add(item.id);
+              }
+            }
           }
         }
       } catch (err) {
-        console.error('Error fetching deal for:', rec.title, err.message);
+        console.error('[Market] Error general en ITAD:', err.message);
       }
+    }
 
-      if (foundDeals.length >= maxItems) break;
-      
-      // Basic rate limiting delay (400ms) to avoid 429 Too Many Requests
-      await new Promise(r => setTimeout(r, 400));
+    // 3. Fallback a Steam Store si ITAD no basta o falla
+    if (foundDeals.length < maxItems) {
+      console.log(`[Market] ITAD incompleto. Buscando el resto en Steam Store (USD)...`);
+      for (const rec of recommendations) {
+        if (foundDeals.length >= maxItems) break;
+        
+        const url = new URL('https://store.steampowered.com/api/storesearch/');
+        url.searchParams.set('term', rec.title);
+        url.searchParams.set('l', 'spanish');
+        url.searchParams.set('cc', 'US');
+
+        try {
+          const response = await fetch(url.toString());
+          if (response.ok) {
+            const data = await response.json();
+            const item = data.items?.[0];
+            if (item && !seen.has(`steam_${item.id}`)) {
+              const initial = item.price?.initial || 0;
+              const final = item.price?.final || 0;
+              const savings = initial > 0 ? Math.round(((initial - final) / initial) * 100) : 0;
+              
+              foundDeals.push({
+                title: item.name,
+                steamAppID: String(item.id),
+                thumb: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${item.id}/header.jpg`,
+                salePrice: final > 0 ? (final / 100).toFixed(2) : "0.00",
+                normalPrice: initial > 0 ? (initial / 100).toFixed(2) : "0.00",
+                savings: String(savings),
+                dealID: `steam_${item.id}`,
+                storeID: "1",
+                reason: rec.reason
+              });
+              seen.add(`steam_${item.id}`);
+            }
+          }
+        } catch (err) { }
+        await new Promise(r => setTimeout(r, 100));
+      }
     }
 
     return res.json({ deals: foundDeals });
+
   } catch (error) {
     console.error('Market recommendations error:', error);
     const statusCode = error?.status || 500;
