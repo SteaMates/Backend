@@ -348,18 +348,12 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
     }
 
     const steamData = await getSteamContextCached(steamId);
-    if (!steamData) {
-      console.warn(`[Market] No se pudo obtener el contexto de Steam para ${steamId}. ¿API Key válida?`);
-      return res.json({ deals: [], error: 'No Steam context' });
-    }
-
     const topGames = (steamData?.topGames || [])
       .map((g) => g?.name)
       .filter(Boolean)
       .slice(0, 20);
 
     if (topGames.length === 0) {
-      console.warn(`[Market] El usuario ${steamId} no tiene juegos o su perfil es privado.`);
       return res.json({ deals: [] });
     }
 
@@ -367,10 +361,7 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
 
     const baseURL = groq.opts?.baseURL || '';
     const isOpenRouter = baseURL.includes('openrouter.ai');
-    // Usamos un modelo más potente para asegurar que los nombres de los juegos sean precisos
-    const model = isOpenRouter ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile';
-
-    console.log(`[Market] Generando recomendaciones para ${steamId} usando ${model}...`);
+    const model = isOpenRouter ? 'meta-llama/llama-3.1-8b-instruct' : 'llama-3.1-8b-instant';
 
     const completion = await groq.chat.completions.create({
       model,
@@ -381,13 +372,14 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
         {
           role: 'system',
           content:
-            'Eres un experto recomendador de juegos de Steam. Basado en la lista del usuario, sugiere juegos que NO tenga. Devuelve SIEMPRE un JSON válido: [{"title":"Nombre Exacto","reason":"Breve explicación"}].',
+            'Eres un recomendador de juegos de Steam. Devuelve SIEMPRE JSON válido un array de objetos [{"title":"string","reason":"string"}].',
         },
         {
           role: 'user',
           content:
-            `Juegos que ya tiene el usuario: ${topGames.join(', ')}. ` +
-            `Sugiere ${maxItems + 4} juegos muy populares que encajen con su perfil. Devuelve SOLO el JSON.`,
+            `Juegos de este usuario: ${topGames.join(', ')}. ` +
+            `Inventate una lista con ${maxItems + 8} juegos de PC muy populares y aclamados que encajen perfectísimamente con sus gustos o sean imprescindibles de esos géneros y NO estén en su lista y pon su nombre EXACTO de la tienda.` +
+            'Cada elemento debe incluir title y reason (una frase). Solo devuelve JSON.',
         },
       ],
     });
@@ -395,10 +387,9 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
     const rawContent = completion.choices[0]?.message?.content || '[]';
     const recommendations = parseRecommendationResponse(rawContent)
       .filter((rec) => !lowerOwned.has(rec.title.toLowerCase()))
-      .slice(0, maxItems + 5);
+      .slice(0, maxItems + 8);
 
     if (recommendations.length === 0) {
-      console.warn('[Market] Groq no devolvió recomendaciones válidas.');
       return res.json({ deals: [] });
     }
 
@@ -411,7 +402,7 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
     if (itadKey) {
       try {
         // 1. Buscamos los IDs de ITAD para cada juego recomendado
-        const idMap = new Map(); // title -> itad_id
+        const idMap = new Map(); // itad_id -> reason
         await Promise.all(recommendations.map(async (rec) => {
           try {
             const searchUrl = `https://api.isthereanydeal.com/games/search/v1?key=${itadKey}&title=${encodeURIComponent(rec.title)}`;
@@ -445,14 +436,11 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
             for (const item of prices) {
               const deal = item.current;
               if (deal && deal.price) {
-                // Buscamos el appid de Steam si está disponible en los metadatos de ITAD o el título
-                // ITAD v2 a veces requiere otra llamada para el appid, pero intentaremos extraerlo si viene.
-                // Si no, usamos el título para generar una imagen genérica.
                 const steamIdMatch = deal.url.match(/\/app\/(\d+)/);
                 const steamAppId = steamIdMatch ? steamIdMatch[1] : "";
                 
                 foundDeals.push({
-                  title: item.title || deal.shop.name, // El título viene en el objeto superior usualmente
+                  title: item.title || deal.shop.name,
                   steamAppID: steamAppId,
                   thumb: steamAppId 
                     ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${steamAppId}/header.jpg`
@@ -474,16 +462,16 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
       }
     }
 
-    // 3. Si ITAD no devolvió suficientes resultados o no hay clave, usamos Steam Store como fallback
+    // 3. Fallback a Steam Store si ITAD no basta o falla
     if (foundDeals.length < maxItems) {
-      console.log(`[Market] ITAD devolvió ${foundDeals.length}. Buscando el resto en Steam Store...`);
+      console.log(`[Market] ITAD incompleto. Buscando el resto en Steam Store (USD)...`);
       for (const rec of recommendations) {
         if (foundDeals.length >= maxItems) break;
         
         const url = new URL('https://store.steampowered.com/api/storesearch/');
         url.searchParams.set('term', rec.title);
         url.searchParams.set('l', 'spanish');
-        url.searchParams.set('cc', 'US'); // También en USD para el fallback
+        url.searchParams.set('cc', 'US');
 
         try {
           const response = await fetch(url.toString());
@@ -509,14 +497,12 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
               seen.add(`steam_${item.id}`);
             }
           }
-        } catch (err) { /* ignore fallback errors */ }
+        } catch (err) { }
         await new Promise(r => setTimeout(r, 100));
       }
     }
 
-    console.log(`[Market] Éxito: ${foundDeals.length} ofertas encontradas (ITAD + Steam).`);
     return res.json({ deals: foundDeals });
-
 
   } catch (error) {
     console.error('Market recommendations error:', error);
@@ -525,7 +511,6 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
     return res.status(statusCode).json({ error: message });
   }
 });
-
 
 // POST /api/chat/message - Send a message and get AI response (with optional screen context)
 router.post('/message', verifyToken, async (req, res) => {
