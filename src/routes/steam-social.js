@@ -165,6 +165,7 @@ router.get("/friends/:steamId", async (req, res) => {
         username: p.personaname,
         avatar: p.avatarfull,
         status: p.personastate,
+        visibility: p.communityvisibilitystate, // 1: privado, 3: público
         currentGame: p.gameextrainfo || null,
         friendSince: friendsList.find((f) => f.steamid === p.steamid)?.friend_since,
       }))
