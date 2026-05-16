@@ -17,17 +17,20 @@
     }
   },
   "tags": [
-    { "name": "Auth",          "description": "Autenticación mediante Steam OpenID y gestión de sesión" },
-    { "name": "Steam",         "description": "Perfiles, juegos, amigos y datos de Steam" },
-    { "name": "Stats",         "description": "Estadísticas de juego: géneros, logros y tiempo" },
-    { "name": "Market",        "description": "Wishlist y alertas de precio (CheapShark + Steam Store)" },
-    { "name": "Lists",         "description": "Listas de juegos de la comunidad" },
-    { "name": "Sessions",      "description": "Sesiones de juego entre amigos" },
-    { "name": "Notifications", "description": "Notificaciones de usuario" },
-    { "name": "Reports",       "description": "Reportes de contenido" },
-    { "name": "Moderation",    "description": "Panel de moderación y administración (solo admins)" },
-    { "name": "Chat",          "description": "Chat con IA para recomendaciones (Groq)" },
-    { "name": "Site",          "description": "Estadísticas globales de la plataforma" }
+    { "name": "Auth",            "description": "Autenticación mediante Steam OpenID y gestión de sesión" },
+    { "name": "Steam - Profile", "description": "steam-profile.js — Perfil público, fondo de perfil y perfil del usuario autenticado" },
+    { "name": "Steam - Games",   "description": "steam-games.js — Biblioteca de juegos, juegos recientes, juegos en común e info de juegos" },
+    { "name": "Steam - Browse",  "description": "steam-browse.js — Búsqueda, juegos gratuitos, filtrado por tags, más jugados, detalles de apps y jugadores activos" },
+    { "name": "Steam - Social",  "description": "steam-social.js — Lista de amigos e historial de precios (IsThereAnyDeal)" },
+    { "name": "Stats",           "description": "Estadísticas de juego: géneros, logros y tiempo" },
+    { "name": "Market",          "description": "Wishlist y alertas de precio (CheapShark + Steam Store)" },
+    { "name": "Lists",           "description": "Listas de juegos de la comunidad" },
+    { "name": "Sessions",        "description": "Sesiones de juego entre amigos" },
+    { "name": "Notifications",   "description": "Notificaciones de usuario" },
+    { "name": "Reports",         "description": "Reportes de contenido" },
+    { "name": "Moderation",      "description": "Panel de moderación y administración (solo admins)" },
+    { "name": "Chat",            "description": "Chat con IA para recomendaciones (Groq)" },
+    { "name": "Site",            "description": "Estadísticas globales de la plataforma" }
   ],
   "paths": {
     "/api/health": {
@@ -166,7 +169,7 @@
     },
     "/api/steam/profile/{steamId}": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Profile"],
         "summary": "Perfil público de un usuario",
         "description": "Devuelve el perfil de Steam de cualquier usuario por su SteamID64.",
         "parameters": [
@@ -182,7 +185,7 @@
     },
     "/api/steam/profile-background/{steamId}": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Profile"],
         "summary": "Fondo de perfil equipado",
         "description": "Devuelve la URL del fondo de perfil equipado en Steam usando IPlayerService/GetProfileItemsEquipped.",
         "parameters": [
@@ -195,7 +198,7 @@
     },
     "/api/steam/me/profile": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Profile"],
         "summary": "Perfil del usuario autenticado",
         "description": "Devuelve el perfil de Steam del usuario autenticado mediante JWT.",
         "parameters": [
@@ -214,7 +217,7 @@
     },
     "/api/steam/games/{steamId}": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Games"],
         "summary": "Biblioteca de juegos de un usuario",
         "description": "Devuelve la lista de juegos de la biblioteca de Steam de un usuario (requiere biblioteca pública).",
         "parameters": [
@@ -229,7 +232,7 @@
     },
     "/api/steam/me/games": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Games"],
         "summary": "Biblioteca del usuario autenticado",
         "description": "Devuelve la biblioteca de juegos del usuario autenticado.",
         "parameters": [
@@ -247,7 +250,7 @@
     },
     "/api/steam/search": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Browse"],
         "summary": "Buscar juegos en Steam",
         "description": "Busca juegos en Steam Store por término de texto.",
         "parameters": [
@@ -261,7 +264,7 @@
     },
     "/api/steam/free-games": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Browse"],
         "summary": "Juegos gratuitos",
         "description": "Lista los juegos gratuitos disponibles en Steam Store.",
         "parameters": [
@@ -276,7 +279,7 @@
     },
     "/api/steam/by-tags": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Browse"],
         "summary": "Juegos por tags de Steam",
         "description": "Devuelve juegos filtrados por tags de Steam (IDs de tags separados por coma).",
         "parameters": [
@@ -293,7 +296,7 @@
     },
     "/api/steam/most-played": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Browse"],
         "summary": "Juegos más jugados globalmente",
         "description": "Devuelve el top de juegos más jugados en Steam en este momento (vía SteamSpy).",
         "parameters": [
@@ -307,7 +310,7 @@
     },
     "/api/steam/tags": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Browse"],
         "summary": "Tags de juegos",
         "description": "Devuelve los tags más votados de uno o varios juegos (vía SteamSpy).",
         "parameters": [
@@ -321,7 +324,7 @@
     },
     "/api/steam/app/{appId}": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Browse"],
         "summary": "Detalle de un juego",
         "description": "Devuelve información detallada de un juego: nombre, géneros, precio, imagen, etc. Usa caché de MongoDB (30 días).",
         "parameters": [
@@ -337,7 +340,7 @@
     },
     "/api/steam/itad/history": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Social"],
         "summary": "Historial de precios (IsThereAnyDeal)",
         "description": "Devuelve el historial de precios de un juego usando la API de IsThereAnyDeal.",
         "parameters": [
@@ -356,7 +359,7 @@
     },
     "/api/steam/friends/{steamId}": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Social"],
         "summary": "Lista de amigos",
         "description": "Devuelve la lista de amigos de un usuario de Steam con sus perfiles básicos.",
         "parameters": [
@@ -371,7 +374,7 @@
     },
     "/api/steam/recent/{steamId}": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Games"],
         "summary": "Juegos jugados recientemente",
         "description": "Devuelve los juegos jugados en las últimas 2 semanas por un usuario.",
         "parameters": [
@@ -386,7 +389,7 @@
     },
     "/api/steam/me/recent": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Games"],
         "summary": "Juegos recientes del usuario autenticado",
         "description": "Devuelve los juegos jugados recientemente por el usuario autenticado.",
         "parameters": [
@@ -404,7 +407,7 @@
     },
     "/api/steam/common-games": {
       "post": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Games"],
         "summary": "Juegos en común",
         "description": "Devuelve los juegos que tienen en común dos o más usuarios de Steam.",
         "parameters": [
@@ -431,7 +434,7 @@
     },
     "/api/steam/games-info": {
       "post": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Games"],
         "summary": "Información de múltiples juegos",
         "description": "Devuelve información de tienda (géneros, precio, imagen) para una lista de AppIDs. Usa caché de MongoDB.",
         "parameters": [
@@ -457,7 +460,7 @@
     },
     "/api/steam/players/{appId}": {
       "get": {
-        "tags": ["Steam"],
+        "tags": ["Steam - Browse"],
         "summary": "Jugadores actuales de un juego",
         "description": "Devuelve el número de jugadores activos en este momento para un juego.",
         "parameters": [
