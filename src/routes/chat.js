@@ -367,7 +367,8 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
 
     const baseURL = groq.opts?.baseURL || '';
     const isOpenRouter = baseURL.includes('openrouter.ai');
-    const model = isOpenRouter ? 'meta-llama/llama-3.1-8b-instruct' : 'llama-3.1-8b-instant';
+    // Usamos un modelo más potente para asegurar que los nombres de los juegos sean precisos
+    const model = isOpenRouter ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile';
 
     console.log(`[Market] Generando recomendaciones para ${steamId} usando ${model}...`);
 
@@ -380,14 +381,13 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
         {
           role: 'system',
           content:
-            'Eres un recomendador de juegos de Steam. Devuelve SIEMPRE JSON válido un array de objetos [{"title":"string","reason":"string"}].',
+            'Eres un experto recomendador de juegos de Steam. Basado en la lista del usuario, sugiere juegos que NO tenga. Devuelve SIEMPRE un JSON válido: [{"title":"Nombre Exacto","reason":"Breve explicación"}].',
         },
         {
           role: 'user',
           content:
-            `Juegos de este usuario: ${topGames.join(', ')}. ` +
-            `Inventate una lista con ${maxItems + 8} juegos de PC muy populares y aclamados que encajen perfectísimamente con sus gustos o sean imprescindibles de esos géneros y NO estén en su lista y pon su nombre EXACTO de la tienda.` +
-            'Cada elemento debe incluir title y reason (una frase). Solo devuelve JSON.',
+            `Juegos que ya tiene el usuario: ${topGames.join(', ')}. ` +
+            `Sugiere ${maxItems + 4} juegos muy populares que encajen con su perfil. Devuelve SOLO el JSON.`,
         },
       ],
     });
@@ -395,28 +395,41 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
     const rawContent = completion.choices[0]?.message?.content || '[]';
     const recommendations = parseRecommendationResponse(rawContent)
       .filter((rec) => !lowerOwned.has(rec.title.toLowerCase()))
-      .slice(0, maxItems + 8);
+      .slice(0, maxItems + 5);
 
     if (recommendations.length === 0) {
       console.warn('[Market] Groq no devolvió recomendaciones válidas.');
       return res.json({ deals: [] });
     }
 
-    console.log(`[Market] Buscando ofertas en CheapShark para ${recommendations.length} juegos...`);
+    console.log(`[Market] Buscando ofertas para ${recommendations.length} juegos con sistema de reintentos...`);
 
     const seen = new Set();
     const foundDeals = [];
 
-    // Fetch recommendations sequentially to avoid CheapShark's strict 1 req/sec rate limit
+    // Helper para fetch con reintentos para CheapShark
+    async function fetchWithRetry(url, retries = 2, delay = 1500) {
+      for (let i = 0; i <= retries; i++) {
+        const response = await fetch(url);
+        if (response.status === 429) {
+          console.warn(`[Market] CheapShark Rate Limit (429). Reintento ${i+1}/${retries} en ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+          delay *= 2; // Backoff exponencial
+          continue;
+        }
+        return response;
+      }
+      return { ok: false, status: 429 };
+    }
+
     for (const rec of recommendations) {
       const url = new URL('https://www.cheapshark.com/api/1.0/deals');
       url.searchParams.set('title', rec.title);
       url.searchParams.set('storeID', '1');
-      url.searchParams.set('pageSize', '5');
-      url.searchParams.set('sortBy', 'Savings');
+      url.searchParams.set('pageSize', '3');
 
       try {
-        const response = await fetch(url.toString());
+        const response = await fetchWithRetry(url.toString());
         if (response.ok) {
           const rawDeals = await response.json();
           const bestDeal = pickBestCheapSharkDeal(rawDeals);
@@ -424,21 +437,18 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
             seen.add(bestDeal.dealID);
             foundDeals.push({ ...bestDeal, reason: rec.reason });
           }
-        } else {
-          console.error(`[Market] CheapShark respondió con error ${response.status} para ${rec.title}`);
         }
       } catch (err) {
-        console.error(`[Market] Error de red buscando ${rec.title}:`, err.message);
+        console.error(`[Market] Error buscando ${rec.title}:`, err.message);
       }
 
       if (foundDeals.length >= maxItems) break;
-      
-      // Aumentamos el delay a 1000ms para asegurar que no nos bloqueen
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 800)); // Delay base entre juegos
     }
 
-    console.log(`[Market] Éxito: ${foundDeals.length} ofertas encontradas.`);
+    console.log(`[Market] Éxito: ${foundDeals.length} ofertas encontradas para ${steamId}.`);
     return res.json({ deals: foundDeals });
+
   } catch (error) {
     console.error('Market recommendations error:', error);
     const statusCode = error?.status || 500;
