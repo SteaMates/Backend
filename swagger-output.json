@@ -2,2046 +2,1373 @@
   "swagger": "2.0",
   "info": {
     "title": "SteaMates API",
-    "description": "Auto-generated API Documentation",
+    "description": "API REST de SteaMates — plataforma social para jugadores de Steam. Permite consultar perfiles, bibliotecas, estadísticas, precios de juegos, listas de la comunidad, sesiones de juego y moderación.",
     "version": "1.0.0"
   },
-  "host": "localhost:3000",
+  "host": "backend-5rwo.onrender.com",
   "basePath": "/",
-  "schemes": [
-    "http"
-  ],
+  "schemes": ["https"],
   "securityDefinitions": {
     "bearerAuth": {
       "type": "apiKey",
       "name": "Authorization",
       "in": "header",
-      "description": "Format: \"Bearer <token>\""
+      "description": "JWT obtenido al iniciar sesión con Steam. Formato: \"Bearer <token>\""
     }
   },
+  "tags": [
+    { "name": "Auth",          "description": "Autenticación mediante Steam OpenID y gestión de sesión" },
+    { "name": "Steam",         "description": "Perfiles, juegos, amigos y datos de Steam" },
+    { "name": "Stats",         "description": "Estadísticas de juego: géneros, logros y tiempo" },
+    { "name": "Market",        "description": "Wishlist y alertas de precio (CheapShark + Steam Store)" },
+    { "name": "Lists",         "description": "Listas de juegos de la comunidad" },
+    { "name": "Sessions",      "description": "Sesiones de juego entre amigos" },
+    { "name": "Notifications", "description": "Notificaciones de usuario" },
+    { "name": "Reports",       "description": "Reportes de contenido" },
+    { "name": "Moderation",    "description": "Panel de moderación y administración (solo admins)" },
+    { "name": "Chat",          "description": "Chat con IA para recomendaciones (Groq)" },
+    { "name": "Site",          "description": "Estadísticas globales de la plataforma" }
+  ],
   "paths": {
     "/api/health": {
       "get": {
-        "description": "",
+        "tags": ["Site"],
+        "summary": "Health check",
+        "description": "Comprueba que el servidor está en línea.",
         "responses": {
-          "200": {
-            "description": "OK"
-          }
+          "200": { "description": "Servidor operativo" }
         }
       }
     },
     "/api/auth/steam": {
       "get": {
-        "description": "",
+        "tags": ["Auth"],
+        "summary": "Iniciar login con Steam",
+        "description": "Redirige al usuario a la página de autenticación de Steam (OpenID). No requiere token.",
         "responses": {
-          "default": {
-            "description": ""
-          }
+          "302": { "description": "Redirección a Steam OpenID" }
         }
       }
     },
     "/api/auth/steam/callback": {
       "get": {
-        "description": "",
+        "tags": ["Auth"],
+        "summary": "Callback de Steam",
+        "description": "Steam redirige aquí tras la autenticación. Crea o actualiza el usuario en BD y devuelve un JWT en los parámetros de la URL de redirección al frontend.",
         "responses": {
-          "default": {
-            "description": ""
-          }
+          "302": { "description": "Redirección al frontend con token JWT en query params" }
         }
       }
     },
     "/api/auth/me": {
       "get": {
-        "description": "",
+        "tags": ["Auth"],
+        "summary": "Obtener sesión actual",
+        "description": "Devuelve los datos del usuario autenticado a partir del JWT. Requiere token.",
         "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Datos del usuario autenticado" },
+          "401": { "description": "Token no proporcionado o inválido" },
+          "403": { "description": "Usuario baneado" },
+          "500": { "description": "Error interno del servidor" }
         }
       }
     },
     "/api/auth/logout": {
       "post": {
-        "description": "",
+        "tags": ["Auth"],
+        "summary": "Cerrar sesión",
+        "description": "Invalida la sesión del usuario en el backend.",
         "responses": {
-          "200": {
-            "description": "OK"
-          }
+          "200": { "description": "Sesión cerrada correctamente" }
         }
       }
     },
     "/api/chat/market-recommendations": {
       "post": {
-        "description": "",
+        "tags": ["Chat"],
+        "summary": "Recomendaciones de mercado con IA",
+        "description": "Genera recomendaciones de juegos en oferta personalizadas usando la biblioteca de Steam del usuario y la IA de Groq.",
         "parameters": [
           {
             "name": "body",
             "in": "body",
+            "required": true,
             "schema": {
               "type": "object",
               "properties": {
-                "steamId": {
-                  "example": "any"
-                },
-                "limit": {
-                  "example": "any"
-                }
-              }
+                "steamId": { "type": "string", "description": "SteamID64 del usuario" },
+                "limit":   { "type": "integer", "description": "Número máximo de recomendaciones (default 5)" }
+              },
+              "required": ["steamId"]
             }
           }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Lista de recomendaciones generadas" },
+          "400": { "description": "steamId no proporcionado" },
+          "503": { "description": "API de Groq no configurada" }
         }
       }
     },
     "/api/chat/message": {
       "post": {
-        "description": "",
+        "tags": ["Chat"],
+        "summary": "Enviar mensaje al chatbot",
+        "description": "Envía un mensaje al asistente de IA. Soporta contexto de Steam, historial de sesión e imágenes.",
         "parameters": [
           {
             "name": "body",
             "in": "body",
+            "required": true,
             "schema": {
               "type": "object",
               "properties": {
-                "message": {
-                  "example": "any"
-                },
-                "sessionId": {
-                  "example": "any"
-                },
-                "userId": {
-                  "example": "any"
-                },
-                "steamId": {
-                  "example": "any"
-                },
-                "screenContext": {
-                  "example": "any"
-                },
-                "includeSteamContext": {
-                  "example": "any"
-                },
-                "image": {
-                  "example": "any"
-                }
-              }
+                "message":             { "type": "string", "description": "Texto del mensaje" },
+                "sessionId":           { "type": "string", "description": "ID de sesión de chat para mantener historial" },
+                "userId":              { "type": "string", "description": "ID del usuario" },
+                "steamId":             { "type": "string", "description": "SteamID64 para incluir contexto de Steam" },
+                "screenContext":       { "type": "string", "description": "Contexto adicional de la pantalla actual" },
+                "includeSteamContext": { "type": "boolean", "description": "Si incluir datos de Steam en el contexto" },
+                "image":               { "type": "string", "description": "Imagen en base64 para análisis visual" }
+              },
+              "required": ["message"]
             }
           }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "429": {
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Respuesta del asistente" },
+          "400": { "description": "Mensaje vacío o inválido" },
+          "401": { "description": "No autorizado" },
+          "429": { "description": "Límite de peticiones a Groq superado" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Groq no disponible" }
         }
       }
     },
     "/api/chat/history/{sessionId}": {
       "get": {
-        "description": "",
+        "tags": ["Chat"],
+        "summary": "Historial de chat",
+        "description": "Devuelve el historial de mensajes de una sesión de chat.",
         "parameters": [
-          {
-            "name": "sessionId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "sessionId", "in": "path", "required": true, "type": "string", "description": "ID de la sesión de chat" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Historial de mensajes" },
+          "404": { "description": "Sesión no encontrada" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/steam/profile/{steamId}": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Perfil público de un usuario",
+        "description": "Devuelve el perfil de Steam de cualquier usuario por su SteamID64.",
         "parameters": [
-          {
-            "name": "steamId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "steamId", "in": "path", "required": true, "type": "string", "description": "SteamID64 del usuario" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Datos del perfil de Steam" },
+          "404": { "description": "Perfil no encontrado" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/profile-background/{steamId}": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Fondo de perfil equipado",
+        "description": "Devuelve la URL del fondo de perfil equipado en Steam usando IPlayerService/GetProfileItemsEquipped.",
         "parameters": [
-          {
-            "name": "steamId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "steamId", "in": "path", "required": true, "type": "string", "description": "SteamID64 del usuario" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          }
+          "200": { "description": "URL del fondo de perfil (backgroundUrl: null si no tiene)" }
         }
       }
     },
     "/api/steam/me/profile": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Perfil del usuario autenticado",
+        "description": "Devuelve el perfil de Steam del usuario autenticado mediante JWT.",
         "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Datos del perfil del usuario autenticado" },
+          "400": { "description": "SteamID no disponible en el token" },
+          "401": { "description": "Token inválido o no proporcionado" },
+          "404": { "description": "Perfil no encontrado" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/games/{steamId}": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Biblioteca de juegos de un usuario",
+        "description": "Devuelve la lista de juegos de la biblioteca de Steam de un usuario (requiere biblioteca pública).",
         "parameters": [
-          {
-            "name": "steamId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "steamId", "in": "path", "required": true, "type": "string", "description": "SteamID64 del usuario" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Lista de juegos con horas de juego" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/me/games": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Biblioteca del usuario autenticado",
+        "description": "Devuelve la biblioteca de juegos del usuario autenticado.",
         "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Lista de juegos con horas de juego" },
+          "400": { "description": "SteamID no disponible" },
+          "401": { "description": "Token inválido" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/search": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Buscar juegos en Steam",
+        "description": "Busca juegos en Steam Store por término de texto.",
         "parameters": [
-          {
-            "name": "term",
-            "in": "query",
-            "type": "string"
-          }
+          { "name": "term", "in": "query", "required": true, "type": "string", "description": "Término de búsqueda" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Resultados de búsqueda" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/steam/free-games": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Juegos gratuitos",
+        "description": "Lista los juegos gratuitos disponibles en Steam Store.",
         "parameters": [
-          {
-            "name": "sort",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "type": "string"
-          }
+          { "name": "sort",  "in": "query", "type": "string", "description": "Criterio de ordenación (default: relevance)" },
+          { "name": "page",  "in": "query", "type": "integer", "description": "Página de resultados (default: 1)" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Lista de juegos gratuitos" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/steam/by-tags": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Juegos por tags de Steam",
+        "description": "Devuelve juegos filtrados por tags de Steam (IDs de tags separados por coma).",
         "parameters": [
-          {
-            "name": "sort",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "tags",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "isFree",
-            "in": "query",
-            "type": "string"
-          }
+          { "name": "tags",   "in": "query", "type": "string",  "description": "IDs de tags separados por coma (ej: 19,492)" },
+          { "name": "isFree", "in": "query", "type": "boolean", "description": "Filtrar solo juegos gratuitos" },
+          { "name": "sort",   "in": "query", "type": "string",  "description": "Criterio de ordenación" },
+          { "name": "page",   "in": "query", "type": "integer", "description": "Página de resultados" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Lista de juegos filtrada por tags" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/steam/most-played": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Juegos más jugados globalmente",
+        "description": "Devuelve el top de juegos más jugados en Steam en este momento (vía SteamSpy).",
         "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "type": "string"
-          }
+          { "name": "page", "in": "query", "type": "integer", "description": "Página de resultados" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Lista de juegos más jugados" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/steam/tags": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Tags de juegos",
+        "description": "Devuelve los tags más votados de uno o varios juegos (vía SteamSpy).",
         "parameters": [
-          {
-            "name": "appIds",
-            "in": "query",
-            "type": "string"
-          }
+          { "name": "appIds", "in": "query", "type": "string", "description": "AppIDs separados por coma" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Mapa de appId → tags" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/steam/app/{appId}": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Detalle de un juego",
+        "description": "Devuelve información detallada de un juego: nombre, géneros, precio, imagen, etc. Usa caché de MongoDB (30 días).",
         "parameters": [
-          {
-            "name": "appId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "appId", "in": "path", "required": true, "type": "integer", "description": "AppID de Steam" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Datos del juego" },
+          "400": { "description": "AppID inválido" },
+          "404": { "description": "Juego no encontrado" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/steam/itad/history": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Historial de precios (IsThereAnyDeal)",
+        "description": "Devuelve el historial de precios de un juego usando la API de IsThereAnyDeal.",
         "parameters": [
-          {
-            "name": "appId",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "title",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "country",
-            "in": "query",
-            "type": "string"
-          }
+          { "name": "appId",   "in": "query", "type": "string", "description": "AppID de Steam" },
+          { "name": "title",   "in": "query", "type": "string", "description": "Título del juego (alternativa a appId)" },
+          { "name": "country", "in": "query", "type": "string", "description": "Código de país ISO (default: ES)" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Historial de precios del juego" },
+          "400": { "description": "Parámetros insuficientes" },
+          "404": { "description": "Juego no encontrado en ITAD" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de ITAD no configurada" }
         }
       }
     },
     "/api/steam/friends/{steamId}": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Lista de amigos",
+        "description": "Devuelve la lista de amigos de un usuario de Steam con sus perfiles básicos.",
         "parameters": [
-          {
-            "name": "steamId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "steamId", "in": "path", "required": true, "type": "string", "description": "SteamID64 del usuario" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Lista de amigos con datos de perfil" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/recent/{steamId}": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Juegos jugados recientemente",
+        "description": "Devuelve los juegos jugados en las últimas 2 semanas por un usuario.",
         "parameters": [
-          {
-            "name": "steamId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "steamId", "in": "path", "required": true, "type": "string", "description": "SteamID64 del usuario" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Lista de juegos recientes" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/me/recent": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Juegos recientes del usuario autenticado",
+        "description": "Devuelve los juegos jugados recientemente por el usuario autenticado.",
         "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Lista de juegos recientes" },
+          "400": { "description": "SteamID no disponible" },
+          "401": { "description": "Token inválido" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/common-games": {
       "post": {
-        "description": "",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
+        "tags": ["Steam"],
+        "summary": "Juegos en común",
+        "description": "Devuelve los juegos que tienen en común dos o más usuarios de Steam.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "steamIds": { "type": "array", "items": { "type": "string" }, "description": "Array de SteamID64" }
+              },
+              "required": ["steamIds"]
+            }
           }
+        ],
+        "responses": {
+          "200": { "description": "Lista de juegos en común" },
+          "400": { "description": "steamIds inválidos" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/games-info": {
       "post": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Información de múltiples juegos",
+        "description": "Devuelve información de tienda (géneros, precio, imagen) para una lista de AppIDs. Usa caché de MongoDB.",
         "parameters": [
           {
             "name": "body",
             "in": "body",
+            "required": true,
             "schema": {
               "type": "object",
               "properties": {
-                "appIds": {
-                  "example": "any"
-                }
-              }
+                "appIds": { "type": "array", "items": { "type": "integer" }, "description": "Lista de AppIDs de Steam" }
+              },
+              "required": ["appIds"]
             }
           }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Mapa de appId → datos del juego" },
+          "400": { "description": "appIds inválidos" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/steam/players/{appId}": {
       "get": {
-        "description": "",
+        "tags": ["Steam"],
+        "summary": "Jugadores actuales de un juego",
+        "description": "Devuelve el número de jugadores activos en este momento para un juego.",
         "parameters": [
-          {
-            "name": "appId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "appId", "in": "path", "required": true, "type": "integer", "description": "AppID de Steam" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Número de jugadores activos" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/steam/stats/time/{steamId}": {
       "get": {
-        "description": "",
+        "tags": ["Stats"],
+        "summary": "Estadísticas de tiempo de juego",
+        "description": "Devuelve el tiempo total jugado y distribución temporal de un usuario.",
         "parameters": [
-          {
-            "name": "steamId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "steamId", "in": "path", "required": true, "type": "string", "description": "SteamID64 del usuario" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Estadísticas de tiempo" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/stats/me/genres": {
       "get": {
-        "description": "",
+        "tags": ["Stats"],
+        "summary": "Géneros favoritos del usuario autenticado",
+        "description": "Calcula los géneros más jugados del usuario autenticado basándose en su biblioteca y la Steam Store API.",
         "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Lista de géneros con horas y porcentaje" },
+          "400": { "description": "SteamID no disponible" },
+          "401": { "description": "Token inválido" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/stats/genres/{steamId}": {
       "get": {
-        "description": "",
+        "tags": ["Stats"],
+        "summary": "Géneros favoritos de un usuario",
+        "description": "Calcula los géneros más jugados de cualquier usuario público de Steam.",
         "parameters": [
-          {
-            "name": "steamId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "steamId", "in": "path", "required": true, "type": "string", "description": "SteamID64 del usuario" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Lista de géneros con horas y porcentaje" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/stats/me/achievements": {
       "get": {
-        "description": "",
+        "tags": ["Stats"],
+        "summary": "Logros del usuario autenticado",
+        "description": "Devuelve los logros más raros y recientes del usuario autenticado.",
         "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Datos de logros (raros, recientes, total)" },
+          "400": { "description": "SteamID no disponible" },
+          "401": { "description": "Token inválido" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/stats/achievements/{steamId}": {
       "get": {
-        "description": "",
+        "tags": ["Stats"],
+        "summary": "Logros de un usuario",
+        "description": "Devuelve los logros más raros y recientes de cualquier usuario público de Steam.",
         "parameters": [
-          {
-            "name": "steamId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
+          { "name": "steamId", "in": "path", "required": true, "type": "string", "description": "SteamID64 del usuario" }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
+          "200": { "description": "Datos de logros (raros, recientes, total)" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/steam/stats/compare": {
       "post": {
-        "description": "",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/lists/": {
-      "post": {
-        "description": "",
+        "tags": ["Stats"],
+        "summary": "Comparar estadísticas entre usuarios",
+        "description": "Compara horas de juego, géneros y logros entre dos o más usuarios de Steam.",
         "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      },
-      "get": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/lists/{id}": {
-      "get": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      },
-      "delete": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/lists/{id}/comments": {
-      "get": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      },
-      "post": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/lists/{id}/like": {
-      "post": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/lists/{id}/dislike": {
-      "post": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/reports/": {
-      "post": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "409": {
-            "description": "Conflict"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/moderation/reports": {
-      "post": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          },
           {
             "name": "body",
             "in": "body",
+            "required": true,
             "schema": {
               "type": "object",
               "properties": {
-                "type": {
-                  "example": "any"
-                },
-                "targetId": {
-                  "example": "any"
-                },
-                "targetType": {
-                  "example": "any"
-                },
-                "reason": {
-                  "example": "any"
-                },
-                "description": {
-                  "example": "any"
-                }
-              }
+                "steamIds": { "type": "array", "items": { "type": "string" }, "description": "Array de SteamID64 a comparar" }
+              },
+              "required": ["steamIds"]
             }
           }
         ],
         "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "409": {
-            "description": "Conflict"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      },
-      "get": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "status",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/moderation/stats": {
-      "get": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/moderation/content/{type}/{id}": {
-      "delete": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "type",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/moderation/reports/{id}": {
-      "put": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/moderation/export": {
-      "get": {
-        "description": "",
-        "produces": [
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ],
-        "parameters": [
-          {
-            "name": "type",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "format",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/moderation/actions": {
-      "post": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/moderation/user/{userId}": {
-      "get": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "userId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/moderation/user/{userId}/export": {
-      "get": {
-        "description": "",
-        "produces": [
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ],
-        "parameters": [
-          {
-            "name": "userId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "format",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/moderation/audit-log": {
-      "get": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "adminId",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/moderation/users": {
-      "get": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "status",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Comparativa de estadísticas" },
+          "400": { "description": "steamIds inválidos" },
+          "500": { "description": "Error interno" },
+          "503": { "description": "API de Steam no configurada" }
         }
       }
     },
     "/api/market/wishlist": {
       "get": {
-        "description": "",
+        "tags": ["Market"],
+        "summary": "Obtener wishlist",
+        "description": "Devuelve la wishlist del usuario autenticado. Si live=true (por defecto), consulta precios actuales en CheapShark.",
         "parameters": [
-          {
-            "name": "live",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "live",          "in": "query",  "type": "boolean", "description": "Incluir precios en tiempo real (default: true)" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Lista de ítems de la wishlist con precios" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Usuario no encontrado" },
+          "500": { "description": "Error interno" }
         }
       },
       "post": {
-        "description": "",
+        "tags": ["Market"],
+        "summary": "Añadir ítem a la wishlist",
+        "description": "Añade un juego a la wishlist del usuario autenticado. Si ya existe, devuelve el existente.",
         "parameters": [
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" },
           {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "steamAppId": { "type": "string",  "description": "AppID de Steam del juego" },
+                "gameId":     { "type": "string",  "description": "ID alternativo del juego" },
+                "title":      { "type": "string",  "description": "Nombre del juego (requerido)" },
+                "thumb":      { "type": "string",  "description": "URL de la imagen miniatura" }
+              },
+              "required": ["title"]
+            }
           }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "201": { "description": "Ítem añadido correctamente" },
+          "200": { "description": "El ítem ya existía en la wishlist" },
+          "400": { "description": "Datos de entrada inválidos" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Usuario no encontrado" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/market/wishlist/{id}": {
       "delete": {
-        "description": "",
+        "tags": ["Market"],
+        "summary": "Eliminar ítem de la wishlist",
+        "description": "Elimina un juego de la wishlist del usuario autenticado por su ID.",
         "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID del ítem en la wishlist" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "204": { "description": "Ítem eliminado correctamente (sin cuerpo de respuesta)" },
+          "400": { "description": "ID no proporcionado" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Usuario no encontrado" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/market/alerts": {
       "get": {
-        "description": "",
+        "tags": ["Market"],
+        "summary": "Obtener alertas de precio",
+        "description": "Devuelve las alertas de precio del usuario. Si live=true (por defecto), comprueba precios actuales y dispara notificaciones si se alcanza el objetivo.",
         "parameters": [
-          {
-            "name": "live",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "live",          "in": "query",  "type": "boolean", "description": "Comprobar precios en tiempo real (default: true)" },
+          { "name": "authorization", "in": "header", "required": true,  "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Lista de alertas con estado de trigger" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Usuario no encontrado" },
+          "500": { "description": "Error interno" }
         }
       },
       "post": {
-        "description": "",
+        "tags": ["Market"],
+        "summary": "Crear alerta de precio",
+        "description": "Crea una nueva alerta de precio para un juego. Si ya existe, actualiza el precio objetivo.",
         "parameters": [
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" },
           {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "steamAppId":  { "type": "string",  "description": "AppID de Steam del juego" },
+                "gameId":      { "type": "string",  "description": "ID alternativo del juego" },
+                "title":       { "type": "string",  "description": "Nombre del juego (requerido)" },
+                "thumb":       { "type": "string",  "description": "URL de la imagen miniatura" },
+                "targetPrice": { "type": "number",  "description": "Precio objetivo en USD (requerido)" }
+              },
+              "required": ["title", "targetPrice"]
+            }
           }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "201": { "description": "Alerta creada correctamente" },
+          "200": { "description": "Alerta ya existía, precio actualizado" },
+          "400": { "description": "Datos de entrada inválidos" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Usuario no encontrado" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/market/alerts/{id}": {
       "patch": {
-        "description": "",
+        "tags": ["Market"],
+        "summary": "Actualizar alerta de precio",
+        "description": "Actualiza el precio objetivo o el estado (activa/desactivada) de una alerta de precio.",
         "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      },
-      "delete": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/sessions/": {
-      "post": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "409": {
-            "description": "Conflict"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/sessions/mine": {
-      "get": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/sessions/{id}/respond": {
-      "patch": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          },
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID de la alerta" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" },
           {
             "name": "body",
             "in": "body",
             "schema": {
               "type": "object",
               "properties": {
-                "response": {
-                  "example": "any"
-                }
+                "targetPrice": { "type": "number",  "description": "Nuevo precio objetivo en USD" },
+                "enabled":     { "type": "boolean", "description": "Activar o desactivar la alerta" }
               }
             }
           }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
+          "200": { "description": "Alerta actualizada" },
+          "400": { "description": "Datos inválidos" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Alerta no encontrada" },
+          "500": { "description": "Error interno" }
+        }
+      },
+      "delete": {
+        "tags": ["Market"],
+        "summary": "Eliminar alerta de precio",
+        "description": "Elimina una alerta de precio del usuario autenticado.",
+        "parameters": [
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID de la alerta" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "204": { "description": "Alerta eliminada correctamente (sin cuerpo de respuesta)" },
+          "400": { "description": "ID no proporcionado" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Alerta no encontrada" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/lists/": {
+      "post": {
+        "tags": ["Lists"],
+        "summary": "Crear lista de juegos",
+        "description": "Crea una nueva lista de juegos. Requiere autenticación y que el usuario no esté silenciado o baneado.",
+        "parameters": [
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "title":       { "type": "string", "description": "Título de la lista" },
+                "description": { "type": "string", "description": "Descripción de la lista" },
+                "categories":  { "type": "array", "items": { "type": "string" }, "description": "Categorías (ej: Acción, RPG)" },
+                "games":       { "type": "array", "description": "Array de juegos a incluir" }
+              },
+              "required": ["title"]
+            }
           }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Lista creada correctamente" },
+          "400": { "description": "Datos de entrada inválidos" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Usuario silenciado o baneado" },
+          "500": { "description": "Error interno" }
+        }
+      },
+      "get": {
+        "tags": ["Lists"],
+        "summary": "Listar listas de la comunidad",
+        "description": "Devuelve las listas de juegos públicas de la comunidad con paginación.",
+        "parameters": [
+          { "name": "page",  "in": "query", "type": "integer", "description": "Página de resultados (default: 1)" },
+          { "name": "limit", "in": "query", "type": "integer", "description": "Resultados por página (default: 20)" }
+        ],
+        "responses": {
+          "200": { "description": "Lista paginada de listas de la comunidad" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/lists/{id}": {
+      "get": {
+        "tags": ["Lists"],
+        "summary": "Obtener una lista",
+        "description": "Devuelve los detalles de una lista de juegos por su ID.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "type": "string", "description": "ID de la lista (MongoDB ObjectId)" }
+        ],
+        "responses": {
+          "200": { "description": "Datos completos de la lista" },
+          "400": { "description": "ID inválido" },
+          "404": { "description": "Lista no encontrada" },
+          "500": { "description": "Error interno" }
+        }
+      },
+      "delete": {
+        "tags": ["Lists"],
+        "summary": "Eliminar lista",
+        "description": "Elimina una lista de juegos. Solo puede hacerlo el autor o un administrador.",
+        "parameters": [
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID de la lista" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Lista eliminada" },
+          "400": { "description": "ID inválido" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "No autorizado (no es el autor)" },
+          "404": { "description": "Lista no encontrada" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/lists/{id}/comments": {
+      "get": {
+        "tags": ["Lists"],
+        "summary": "Comentarios de una lista",
+        "description": "Devuelve los comentarios de una lista con paginación.",
+        "parameters": [
+          { "name": "id",    "in": "path",  "required": true, "type": "string",  "description": "ID de la lista" },
+          { "name": "page",  "in": "query", "type": "integer", "description": "Página (default: 1)" },
+          { "name": "limit", "in": "query", "type": "integer", "description": "Por página (default: 20)" }
+        ],
+        "responses": {
+          "200": { "description": "Lista de comentarios paginada" },
+          "400": { "description": "ID inválido" },
+          "500": { "description": "Error interno" }
+        }
+      },
+      "post": {
+        "tags": ["Lists"],
+        "summary": "Publicar comentario",
+        "description": "Añade un comentario a una lista. Requiere autenticación y que el usuario no esté silenciado.",
+        "parameters": [
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID de la lista" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "content":       { "type": "string", "description": "Texto del comentario" },
+                "parentComment": { "type": "string", "description": "ID del comentario padre (para respuestas)" }
+              },
+              "required": ["content"]
+            }
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Comentario publicado" },
+          "400": { "description": "Contenido vacío o ID inválido" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Usuario silenciado o baneado" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/lists/{id}/like": {
+      "post": {
+        "tags": ["Lists"],
+        "summary": "Dar like a una lista",
+        "description": "Añade o quita el like del usuario autenticado a una lista (toggle).",
+        "parameters": [
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID de la lista" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Estado de like actualizado" },
+          "400": { "description": "ID inválido" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Lista no encontrada" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/lists/{id}/dislike": {
+      "post": {
+        "tags": ["Lists"],
+        "summary": "Dar dislike a una lista",
+        "description": "Añade o quita el dislike del usuario autenticado a una lista (toggle).",
+        "parameters": [
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID de la lista" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Estado de dislike actualizado" },
+          "400": { "description": "ID inválido" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Lista no encontrada" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/reports/": {
+      "post": {
+        "tags": ["Reports"],
+        "summary": "Reportar contenido",
+        "description": "Envía un reporte sobre un usuario, lista o comentario. No se pueden hacer reportes duplicados.",
+        "parameters": [
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "targetId":    { "type": "string", "description": "ID del contenido reportado" },
+                "targetType":  { "type": "string", "enum": ["user", "list", "comment"], "description": "Tipo de contenido" },
+                "reason":      { "type": "string", "description": "Motivo del reporte" },
+                "description": { "type": "string", "description": "Descripción adicional (opcional)" }
+              },
+              "required": ["targetId", "targetType", "reason"]
+            }
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Reporte enviado" },
+          "400": { "description": "Datos inválidos" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Contenido reportado no encontrado" },
+          "409": { "description": "Ya has reportado este contenido" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/sessions/": {
+      "post": {
+        "tags": ["Sessions"],
+        "summary": "Crear sesión de juego",
+        "description": "Crea una sesión de juego e invita a otros usuarios. Envía notificaciones a los participantes.",
+        "parameters": [
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "game":         { "type": "object",  "description": "Datos del juego (appId, name, headerImage)" },
+                "scheduledAt":  { "type": "string",  "description": "Fecha/hora en formato ISO 8601" },
+                "participants": { "type": "array",   "description": "Lista de usuarios invitados" },
+                "notes":        { "type": "string",  "description": "Notas adicionales (opcional)" }
+              },
+              "required": ["game", "scheduledAt", "participants"]
+            }
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Sesión creada" },
+          "400": { "description": "Datos inválidos" },
+          "401": { "description": "Token inválido" },
+          "409": { "description": "Sesión duplicada" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/sessions/mine": {
+      "get": {
+        "tags": ["Sessions"],
+        "summary": "Mis sesiones de juego",
+        "description": "Devuelve todas las sesiones de juego en las que participa el usuario autenticado.",
+        "parameters": [
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Lista de sesiones del usuario" },
+          "401": { "description": "Token inválido" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/sessions/{id}/respond": {
+      "patch": {
+        "tags": ["Sessions"],
+        "summary": "Responder a una sesión",
+        "description": "Acepta o rechaza una invitación a una sesión de juego.",
+        "parameters": [
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID de la sesión" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "response": { "type": "string", "enum": ["accepted", "declined"], "description": "Respuesta a la invitación" }
+              },
+              "required": ["response"]
+            }
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Respuesta registrada" },
+          "400": { "description": "Respuesta inválida" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "No eres participante de esta sesión" },
+          "404": { "description": "Sesión no encontrada" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/sessions/{id}/leave": {
       "patch": {
-        "description": "",
+        "tags": ["Sessions"],
+        "summary": "Abandonar sesión",
+        "description": "Abandona una sesión de juego en la que participas.",
         "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID de la sesión" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Has abandonado la sesión" },
+          "400": { "description": "No puedes abandonar si eres el host" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "No eres participante" },
+          "404": { "description": "Sesión no encontrada" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/sessions/{id}/cancel": {
       "patch": {
-        "description": "",
+        "tags": ["Sessions"],
+        "summary": "Cancelar sesión",
+        "description": "Cancela una sesión de juego. Solo puede hacerlo el host.",
         "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID de la sesión" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Sesión cancelada" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo el host puede cancelar" },
+          "404": { "description": "Sesión no encontrada" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/notifications/": {
       "get": {
-        "description": "",
+        "tags": ["Notifications"],
+        "summary": "Obtener notificaciones",
+        "description": "Devuelve las notificaciones del usuario autenticado. Soporta filtro por no leídas y límite.",
         "parameters": [
-          {
-            "name": "unread",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "unread",        "in": "query",  "type": "boolean", "description": "Filtrar solo no leídas" },
+          { "name": "limit",         "in": "query",  "type": "integer", "description": "Máximo de notificaciones (default: 50)" },
+          { "name": "authorization", "in": "header", "required": true,  "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Lista de notificaciones" },
+          "401": { "description": "Token inválido" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/notifications/{id}/read": {
       "patch": {
-        "description": "",
+        "tags": ["Notifications"],
+        "summary": "Marcar notificación como leída",
+        "description": "Marca una notificación específica como leída.",
         "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID de la notificación" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Notificación marcada como leída" },
+          "401": { "description": "Token inválido" },
+          "404": { "description": "Notificación no encontrada" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/notifications/read-all": {
       "patch": {
-        "description": "",
+        "tags": ["Notifications"],
+        "summary": "Marcar todas como leídas",
+        "description": "Marca todas las notificaciones del usuario autenticado como leídas.",
         "parameters": [
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Todas las notificaciones marcadas como leídas" },
+          "401": { "description": "Token inválido" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/moderation/reports": {
+      "post": {
+        "tags": ["Moderation"],
+        "summary": "Crear reporte (admin)",
+        "description": "Crea un reporte de moderación. Requiere autenticación de administrador.",
+        "parameters": [
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" },
           {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "type":        { "type": "string" },
+                "targetId":    { "type": "string" },
+                "targetType":  { "type": "string" },
+                "reason":      { "type": "string" },
+                "description": { "type": "string" }
+              }
+            }
           }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Internal Server Error"
+          "201": { "description": "Reporte creado" },
+          "400": { "description": "Datos inválidos" },
+          "401": { "description": "Token inválido" },
+          "409": { "description": "Reporte duplicado" },
+          "500": { "description": "Error interno" }
+        }
+      },
+      "get": {
+        "tags": ["Moderation"],
+        "summary": "Listar reportes (admin)",
+        "description": "Devuelve todos los reportes de moderación con filtros y paginación. Solo administradores.",
+        "parameters": [
+          { "name": "status",        "in": "query",  "type": "string",  "description": "Filtrar por estado (pending, resolved, dismissed)" },
+          { "name": "type",          "in": "query",  "type": "string",  "description": "Filtrar por tipo de contenido" },
+          { "name": "page",          "in": "query",  "type": "integer", "description": "Página" },
+          { "name": "limit",         "in": "query",  "type": "integer", "description": "Por página" },
+          { "name": "search",        "in": "query",  "type": "string",  "description": "Búsqueda por texto" },
+          { "name": "authorization", "in": "header", "required": true,  "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Lista de reportes" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo administradores" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/moderation/stats": {
+      "get": {
+        "tags": ["Moderation"],
+        "summary": "Estadísticas de moderación (admin)",
+        "description": "Devuelve estadísticas del panel de moderación. Solo administradores.",
+        "parameters": [
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Estadísticas de moderación" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo administradores" }
+        }
+      }
+    },
+    "/api/moderation/content/{type}/{id}": {
+      "delete": {
+        "tags": ["Moderation"],
+        "summary": "Eliminar contenido (admin)",
+        "description": "Elimina un contenido específico (lista, comentario o usuario). Solo administradores.",
+        "parameters": [
+          { "name": "type",          "in": "path",   "required": true, "type": "string", "description": "Tipo: list, comment, user" },
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID del contenido" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Contenido eliminado" },
+          "400": { "description": "Tipo inválido" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo administradores" },
+          "404": { "description": "Contenido no encontrado" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/moderation/reports/{id}": {
+      "put": {
+        "tags": ["Moderation"],
+        "summary": "Resolver reporte (admin)",
+        "description": "Actualiza el estado de un reporte (resolved, dismissed). Solo administradores.",
+        "parameters": [
+          { "name": "id",            "in": "path",   "required": true, "type": "string", "description": "ID del reporte" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Reporte actualizado" },
+          "400": { "description": "Estado inválido" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo administradores" },
+          "404": { "description": "Reporte no encontrado" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/moderation/export": {
+      "get": {
+        "tags": ["Moderation"],
+        "summary": "Exportar datos de moderación (admin)",
+        "description": "Exporta datos de moderación en formato CSV o XLSX. Solo administradores.",
+        "produces": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "text/csv"],
+        "parameters": [
+          { "name": "type",          "in": "query",  "type": "string", "description": "Tipo de exportación (reports, users, actions)" },
+          { "name": "format",        "in": "query",  "type": "string", "description": "Formato: csv o xlsx (default: xlsx)" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Archivo de exportación" },
+          "400": { "description": "Tipo inválido" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo administradores" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/moderation/actions": {
+      "post": {
+        "tags": ["Moderation"],
+        "summary": "Aplicar acción de moderación (admin)",
+        "description": "Aplica una acción de moderación a un usuario (warn, silence, ban, unban). Solo administradores.",
+        "parameters": [
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "userId":   { "type": "string", "description": "ID del usuario a moderar" },
+                "action":   { "type": "string", "enum": ["warn", "silence", "ban", "unban"], "description": "Acción de moderación" },
+                "reason":   { "type": "string", "description": "Motivo de la acción" },
+                "duration": { "type": "integer", "description": "Duración en horas (para silence temporal)" }
+              },
+              "required": ["userId", "action", "reason"]
+            }
           }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Acción de moderación aplicada" },
+          "200": { "description": "Acción aplicada (unban)" },
+          "400": { "description": "Datos inválidos" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo administradores" },
+          "404": { "description": "Usuario no encontrado" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/moderation/user/{userId}": {
+      "get": {
+        "tags": ["Moderation"],
+        "summary": "Historial de moderación de un usuario (admin)",
+        "description": "Devuelve el historial completo de acciones de moderación de un usuario. Solo administradores.",
+        "parameters": [
+          { "name": "userId",        "in": "path",   "required": true, "type": "string", "description": "ID del usuario" },
+          { "name": "authorization", "in": "header", "required": true, "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Historial de moderación del usuario" },
+          "400": { "description": "ID inválido" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo administradores" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/moderation/user/{userId}/export": {
+      "get": {
+        "tags": ["Moderation"],
+        "summary": "Exportar historial de un usuario (admin)",
+        "description": "Exporta el historial de moderación de un usuario en CSV o XLSX. Solo administradores.",
+        "produces": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "text/csv"],
+        "parameters": [
+          { "name": "userId",        "in": "path",   "required": true, "type": "string",  "description": "ID del usuario" },
+          { "name": "format",        "in": "query",  "type": "string",  "description": "Formato: csv o xlsx (default: xlsx)" },
+          { "name": "authorization", "in": "header", "required": true,  "type": "string",  "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Archivo de exportación" },
+          "400": { "description": "ID inválido" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo administradores" },
+          "404": { "description": "Usuario no encontrado" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/moderation/audit-log": {
+      "get": {
+        "tags": ["Moderation"],
+        "summary": "Log de auditoría (admin)",
+        "description": "Devuelve el registro de todas las acciones realizadas por los administradores. Solo administradores.",
+        "parameters": [
+          { "name": "page",          "in": "query",  "type": "integer", "description": "Página" },
+          { "name": "limit",         "in": "query",  "type": "integer", "description": "Por página" },
+          { "name": "adminId",       "in": "query",  "type": "string",  "description": "Filtrar por adminID" },
+          { "name": "authorization", "in": "header", "required": true,  "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Log de auditoría paginado" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo administradores" },
+          "500": { "description": "Error interno" }
+        }
+      }
+    },
+    "/api/moderation/users": {
+      "get": {
+        "tags": ["Moderation"],
+        "summary": "Listar usuarios (admin)",
+        "description": "Devuelve la lista de usuarios con filtros por estado y búsqueda. Solo administradores.",
+        "parameters": [
+          { "name": "status",        "in": "query",  "type": "string",  "description": "Filtrar por estado (active, warned, silenced, banned)" },
+          { "name": "page",          "in": "query",  "type": "integer", "description": "Página" },
+          { "name": "limit",         "in": "query",  "type": "integer", "description": "Por página" },
+          { "name": "search",        "in": "query",  "type": "string",  "description": "Búsqueda por nombre de usuario" },
+          { "name": "authorization", "in": "header", "required": true,  "type": "string", "description": "Bearer <token>" }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Lista de usuarios paginada" },
+          "401": { "description": "Token inválido" },
+          "403": { "description": "Solo administradores" },
+          "500": { "description": "Error interno" }
         }
       }
     },
     "/api/site/stats": {
       "get": {
-        "description": "",
+        "tags": ["Site"],
+        "summary": "Estadísticas globales",
+        "description": "Devuelve estadísticas globales de la plataforma: usuarios registrados, listas publicadas, sesiones creadas, etc.",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
+          "200": { "description": "Estadísticas de la plataforma" },
+          "500": { "description": "Error interno" }
         }
       }
     }

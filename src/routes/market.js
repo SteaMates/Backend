@@ -510,7 +510,7 @@ router.delete("/wishlist/:id", verifyToken, async (req, res) => {
       await user.save();
     }
 
-    return res.json({ success: true, removed });
+    return res.status(204).end();
   } catch (error) {
     console.error("Wishlist delete error:", error);
     return res.status(500).json({ error: "Error removing wishlist item" });
@@ -796,7 +796,7 @@ router.delete("/alerts/:id", verifyToken, async (req, res) => {
       await user.save();
     }
 
-    return res.json({ success: true, removed });
+    return res.status(204).end();
   } catch (error) {
     console.error("Price alert delete error:", error);
     return res.status(500).json({ error: "Error deleting price alert" });
