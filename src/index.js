@@ -75,8 +75,7 @@ function buildRateLimiter({ windowMs = 15 * 60 * 1000, max = 200 } = {}) {
   };
 }
 
-const generalLimiter = buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 200 });
-const authLimiter    = buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 30  });
+const generalLimiter = buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 500 });
 const chatLimiter    = buildRateLimiter({ windowMs:      60 * 1000, max: 30  }); // Groq: 30 req/min
 
 // Connect to MongoDB (SOLO SI NO ESTAMOS EN TESTS)
@@ -135,8 +134,8 @@ app.use(passport.session());
 // Ambos prefijos apuntan a los mismos routers para compatibilidad.
 // ---------------------------------------------------------------------------
 function registerRoutes(prefix) {
-  app.use(`${prefix}/auth`,          authLimiter,  authRoutes);
-  app.use(`${prefix}/chat`,          chatLimiter,  chatRoutes);
+  app.use(`${prefix}/auth`,          generalLimiter, authRoutes);
+  app.use(`${prefix}/chat`,          chatLimiter,    chatRoutes);
   app.use(`${prefix}/steam/stats`,   generalLimiter, statsRoutes);
   app.use(`${prefix}/steam`,         generalLimiter, steamRoutes);
   app.use(`${prefix}/lists`,         generalLimiter, listsRoutes);
