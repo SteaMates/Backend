@@ -232,46 +232,60 @@ router.post(
       const saved = await newComment.save();
       await saved.populate("author", "username avatar steamId");
 
-      // --- LÓGICA DE NOTIFICACIONES POR MENCIÓN ---
+      // --- LÓGICA DE NOTIFICACIONES ---
+      const list = await GameList.findById(req.params.id);
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+
+      // 1. Notificaciones por mención
       const mentionRegex = /@([a-zA-Z0-9_]+)/g;
       let match;
       const mentionedUsernames = new Set();
-
       while ((match = mentionRegex.exec(content)) !== null) {
-        mentionedUsernames.add(match[1]); // Extraemos el nombre sin la '@'
+        mentionedUsernames.add(match[1]);
       }
 
+      const notifiedUsers = new Set();
+
       if (mentionedUsernames.size > 0) {
-        // Buscar en MongoDB si esos usuarios realmente existen
         const mentionedUsers = await User.find({
           username: { $in: Array.from(mentionedUsernames) },
         });
 
-        const notifications = [];
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30); // La notificación se borrará automáticamente en 30 días
-
         for (const mentionedUser of mentionedUsers) {
-          // Evitamos enviar una notificación a nosotros mismos si escribimos nuestro propio @nombre
           if (mentionedUser._id.toString() !== req.user._id.toString()) {
-            notifications.push({
+            await Notification.create({
               recipient: mentionedUser._id,
               from: req.user._id,
               type: "list_mention",
               title: "Mención en Lista",
               message: `${req.user.username} te ha mencionado en un comentario.`,
-              data: { listId: req.params.id, commentId: saved._id }, // Para que al clicar en la noti le lleve a la lista
+              data: { listId: req.params.id, commentId: saved._id },
               expiresAt,
             });
+            notifiedUsers.add(mentionedUser._id.toString());
           }
         }
+      }
 
-        // Si hay notificaciones válidas, insertarlas de golpe en la base de datos
-        if (notifications.length > 0) {
-          await Notification.insertMany(notifications);
-        }
+      // 2. Notificación al autor de la lista por nuevo comentario
+      if (
+        list && 
+        list.author.toString() !== req.user._id.toString() && 
+        !notifiedUsers.has(list.author.toString())
+      ) {
+        await Notification.create({
+          recipient: list.author,
+          from: req.user._id,
+          type: "list_comment",
+          title: "Nuevo comentario en tu lista",
+          message: `${req.user.username} ha comentado en tu lista "${list.title}".`,
+          data: { listId: req.params.id, commentId: saved._id },
+          expiresAt,
+        });
       }
       // ---------------------------------------------
+
 
       res.status(201).json(saved);
     } catch (error) {

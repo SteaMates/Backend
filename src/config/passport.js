@@ -38,41 +38,41 @@ export function configureSteamStrategy() {
     return;
   }
 
-  const backendUrl = process.env.BACKEND_URL || `http://localhost:${serverPort}`;
+  const backendUrl = process.env.CLIENT_URL || `http://localhost:${serverPort}`;
 
   passport.use(new SteamStrategy({
     returnURL: `${backendUrl}/api/auth/steam/callback`,
     realm: backendUrl + '/',
     apiKey: steamApiKey,
   },
-  async (identifier, profile, done) => {
-    try {
-      const steamId = profile.id;
-      
-      // Find or create user
-      let user = await User.findOne({ steamId });
-      
-      if (!user) {
-        user = await User.create({
-          steamId,
-          username: profile.displayName,
-          avatar: profile.photos?.[2]?.value || profile.photos?.[0]?.value || '',
-          profileUrl: profile._json?.profileurl || '',
-          realName: profile._json?.realname || '',
-        });
-        console.log(`New user created: ${profile.displayName} (${steamId})`);
-      } else {
-        // Update profile info on login
-        user.username = profile.displayName;
-        user.avatar = profile.photos?.[2]?.value || profile.photos?.[0]?.value || user.avatar;
-        user.profileUrl = profile._json?.profileurl || user.profileUrl;
-        user.lastLogin = new Date();
-        await user.save();
-      }
+    async (identifier, profile, done) => {
+      try {
+        const steamId = profile.id;
 
-      return done(null, user);
-    } catch (err) {
-      return done(err, null);
-    }
-  }));
+        // Find or create user
+        let user = await User.findOne({ steamId });
+
+        if (!user) {
+          user = await User.create({
+            steamId,
+            username: profile.displayName,
+            avatar: profile.photos?.[2]?.value || profile.photos?.[0]?.value || '',
+            profileUrl: profile._json?.profileurl || '',
+            realName: profile._json?.realname || '',
+          });
+          console.log(`New user created: ${profile.displayName} (${steamId})`);
+        } else {
+          // Update profile info on login
+          user.username = profile.displayName;
+          user.avatar = profile.photos?.[2]?.value || profile.photos?.[0]?.value || user.avatar;
+          user.profileUrl = profile._json?.profileurl || user.profileUrl;
+          user.lastLogin = new Date();
+          await user.save();
+        }
+
+        return done(null, user);
+      } catch (err) {
+        return done(err, null);
+      }
+    }));
 }
