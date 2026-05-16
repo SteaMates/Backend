@@ -222,6 +222,35 @@ function getUserChatWindow(userId) {
   return entry;
 }
 
+// ---------------------------------------------------------------------------
+// Rate limit para recomendaciones de mercado: 1 petición cada 5 minutos por usuario
+// ---------------------------------------------------------------------------
+const MARKET_RECS_WINDOW_MS = 5 * 60 * 1000;
+const userMarketWindows = new Map();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, ts] of userMarketWindows) {
+    if (now - ts >= MARKET_RECS_WINDOW_MS) userMarketWindows.delete(key);
+  }
+}, MARKET_RECS_WINDOW_MS).unref();
+
+function checkMarketRecsLimit(userId) {
+  if (process.env.NODE_ENV === 'test') return null;
+  const now = Date.now();
+  const last = userMarketWindows.get(userId);
+  if (last && now - last < MARKET_RECS_WINDOW_MS) {
+    const resetAt = last + MARKET_RECS_WINDOW_MS;
+    const retryAfterSecs = Math.ceil((resetAt - now) / 1000);
+    const resetTime = new Date(resetAt).toLocaleTimeString('es-ES', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    return { retryAfter: retryAfterSecs, resetTime };
+  }
+  userMarketWindows.set(userId, now);
+  return null;
+}
+
 /**
  * Selecciona el modelo en función del número de consulta en la ventana actual.
  * Primera consulta → versatile. Resto → scout (más barato y sin cuota diaria tan baja).
@@ -335,6 +364,16 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
 
     if (!steamId || typeof steamId !== 'string') {
       return res.status(400).json({ error: 'steamId is required' });
+    }
+
+    // Rate limit: 1 recomendación cada 5 minutos por usuario
+    const uid = req.user?._id?.toString() || req.user?.steamId || 'anon';
+    const limitHit = checkMarketRecsLimit(uid);
+    if (limitHit) {
+      return res.status(429).json({
+        error: `Solo puedes actualizar las recomendaciones una vez cada 5 minutos. Vuelve a intentarlo a las ${limitHit.resetTime}.`,
+        retryAfter: limitHit.retryAfter,
+      });
     }
 
     const maxItems = Math.min(Math.max(Number(limit) || 6, 1), 12);
