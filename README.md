@@ -37,7 +37,6 @@ The server runs on `http://localhost:3001` by default.
 | `STEAM_API_KEY` | Steam Web API key ([get one](https://steamcommunity.com/dev/apikey)) |
 | `SESSION_SECRET` | Random string for session encryption |
 | `CLIENT_URL` | Frontend URL for CORS (default: `http://localhost:5173`) |
-| `BACKEND_URL` | Backend URL for Steam callback (default: `http://localhost:3001`) |
 | `PORT` | Server port (default: `3001`) |
 
 ## API Endpoints
