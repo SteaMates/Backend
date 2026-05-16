@@ -79,10 +79,10 @@ const notificationSchema = new mongoose.Schema(
     },
 
     // TTL field. With expireAfterSeconds: 0, the document expires at this exact date.
+    // index: true se omite aquí porque el TTL index ya se define abajo con schema.index()
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
   },
   {

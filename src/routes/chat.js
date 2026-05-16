@@ -6,6 +6,7 @@
 import express from "express";
 import Groq from 'groq-sdk';
 import ChatSession from '../models/ChatSession.js';
+import { verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
 const STEAM_API_BASE = 'https://api.steampowered.com';
@@ -282,7 +283,7 @@ function pickBestCheapSharkDeal(rawDeals) {
 }
 
 // POST /api/chat/market-recommendations - Personalized recommendations (Groq + CheapShark)
-router.post('/market-recommendations', async (req, res) => {
+router.post('/market-recommendations', verifyToken, async (req, res) => {
   try {
     const { steamId, limit } = req.body || {};
 
@@ -387,7 +388,7 @@ router.post('/market-recommendations', async (req, res) => {
 });
 
 // POST /api/chat/message - Send a message and get AI response (with optional screen context)
-router.post('/message', async (req, res) => {
+router.post('/message', verifyToken, async (req, res) => {
   try {
     const { message, sessionId, userId, steamId, screenContext, includeSteamContext, image } = req.body;
 

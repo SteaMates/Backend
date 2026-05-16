@@ -35,6 +35,50 @@ const swaggerDocument = require("../swagger-output.json");
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// ---------------------------------------------------------------------------
+// Rate limiting — sin dependencias externas, almacenamiento en memoria
+// Límite general: 200 req / 15 min por IP
+// Límite estricto (auth, chat): 30 req / 15 min por IP
+// ---------------------------------------------------------------------------
+const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 minutos
+
+function buildRateLimiter({ max = 200 } = {}) {
+  const hits = new Map();
+
+  // Limpiar entradas caducadas cada 5 minutos para no acumular memoria
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of hits) {
+      if (now - entry.start > RATE_WINDOW_MS) hits.delete(key);
+    }
+  }, 5 * 60 * 1000).unref();
+
+  return (req, res, next) => {
+    if (process.env.NODE_ENV === 'test') return next(); // no aplicar en tests
+
+    const key = req.ip;
+    const now = Date.now();
+    const entry = hits.get(key);
+
+    if (!entry || now - entry.start > RATE_WINDOW_MS) {
+      hits.set(key, { start: now, count: 1 });
+      return next();
+    }
+
+    entry.count += 1;
+
+    if (entry.count > max) {
+      res.set('Retry-After', Math.ceil((entry.start + RATE_WINDOW_MS - now) / 1000));
+      return res.status(429).json({ error: 'Demasiadas peticiones. Inténtalo más tarde.' });
+    }
+
+    return next();
+  };
+}
+
+const generalLimiter = buildRateLimiter({ max: 200 });
+const strictLimiter  = buildRateLimiter({ max: 30 });
+
 // Connect to MongoDB (SOLO SI NO ESTAMOS EN TESTS)
 if (process.env.NODE_ENV !== 'test') {
   await connectDB();
@@ -86,20 +130,26 @@ configureSteamStrategy();
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/chat", chatRoutes);
-app.use("/api/steam", steamRoutes);
-app.use("/api/steam/stats", statsRoutes);
-app.use("/api/lists", listsRoutes);
-app.use("/api/reports", reportsRoutes);
-app.use("/api/moderation", moderationRoutes);
-app.use("/api/market", marketRoutes);
+// ---------------------------------------------------------------------------
+// Routes — v0 (legacy, sin prefijo /v1) + v1 (canónico)
+// Ambos prefijos apuntan a los mismos routers para compatibilidad.
+// ---------------------------------------------------------------------------
+function registerRoutes(prefix) {
+  app.use(`${prefix}/auth`,          strictLimiter,  authRoutes);
+  app.use(`${prefix}/chat`,          strictLimiter,  chatRoutes);
+  app.use(`${prefix}/steam/stats`,   generalLimiter, statsRoutes);
+  app.use(`${prefix}/steam`,         generalLimiter, steamRoutes);
+  app.use(`${prefix}/lists`,         generalLimiter, listsRoutes);
+  app.use(`${prefix}/reports`,       generalLimiter, reportsRoutes);
+  app.use(`${prefix}/moderation`,    generalLimiter, moderationRoutes);
+  app.use(`${prefix}/market`,        generalLimiter, marketRoutes);
+  app.use(`${prefix}/sessions`,      generalLimiter, sessionsRoutes);
+  app.use(`${prefix}/notifications`, generalLimiter, notificationsRoutes);
+  app.use(`${prefix}/site`,          generalLimiter, siteRoutes);
+}
 
-// NUEVO
-app.use("/api/sessions", sessionsRoutes);
-app.use("/api/notifications", notificationsRoutes);
-app.use("/api/site", siteRoutes);
+registerRoutes("/api");     // rutas legacy (compatibilidad con frontend y Vercel)
+registerRoutes("/api/v1");  // rutas versionadas (canónico)
 
 // Swagger Documentation Route
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
