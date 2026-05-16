@@ -75,7 +75,7 @@ function buildRateLimiter({ windowMs = 15 * 60 * 1000, max = 200 } = {}) {
   };
 }
 
-const generalLimiter = buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 500 });
+const generalLimiter = buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 1000 });
 const chatLimiter    = buildRateLimiter({ windowMs:      60 * 1000, max: 30  }); // Groq: 30 req/min
 
 // Connect to MongoDB (SOLO SI NO ESTAMOS EN TESTS)
