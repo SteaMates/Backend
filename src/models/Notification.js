@@ -38,7 +38,8 @@ const notificationSchema = new mongoose.Schema(
         "session_cancelled",
         "session_updated",
         "price_alert_triggered",
-        "list_mention" 
+        "list_mention",
+        "content_deleted"
       ],
       required: true,
       index: true,

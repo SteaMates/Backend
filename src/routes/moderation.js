@@ -12,6 +12,7 @@ import AuditLog from "../models/AuditLog.js";
 import User from "../models/User.js";
 import GameList from "../models/GameList.js";
 import Comment from "../models/Comment.js";
+import Notification from "../models/Notification.js";
 import ExcelJS from "exceljs";
 import mongoose from "mongoose";
 import {
@@ -278,6 +279,9 @@ router.delete(
   async (req, res) => {
     try {
       const { type, id } = req.params;
+      const { reason } = req.body;
+
+      const deleteReason = reason || "Contenido eliminado por un administrador por incumplimiento de las normas.";
 
       if (!isObjectId(id)) {
         return res.status(400).json({ error: "Invalid content id" });
@@ -287,13 +291,28 @@ router.delete(
         const list = await GameList.findById(id);
         if (!list)
           return res.status(404).json({ error: "Lista no encontrada" });
+        
+        const authorId = list.author;
+        const listTitle = list.title;
+
         await GameList.findByIdAndDelete(id);
 
-        // Auto-resolver reportes de los comentarios de la lista y borrarlos
-        const comments = await Comment.find({ list: id });
-        const commentIds = comments.map((c) => c._id);
-
+        // Borrar comentarios asociados
         await Comment.deleteMany({ list: id });
+
+        // Enviar notificación al autor
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+        
+        await Notification.create({
+          recipient: authorId,
+          from: req.user._id,
+          type: "content_deleted",
+          title: "Tu lista ha sido eliminada",
+          message: `Tu lista "${listTitle}" ha sido eliminada por un administrador. Motivo: ${deleteReason}`,
+          expiresAt,
+          data: { type: "list", title: listTitle, reason: deleteReason }
+        });
 
         // Auditoría
         await AuditLog.create({
@@ -301,7 +320,7 @@ router.delete(
           action: "delete_content",
           targetId: id,
           targetType: "GameList",
-          changes: { title: list.title },
+          changes: { title: listTitle, reason: deleteReason },
         });
 
         // Auto-resolver reportes de la lista
@@ -310,36 +329,35 @@ router.delete(
           {
             $set: {
               status: "resolved",
-              resolution: "Contenido eliminado por un administrador.",
+              resolution: `Contenido eliminado: ${deleteReason}`,
               resolvedBy: req.user._id,
               resolvedAt: new Date(),
             },
           },
         );
-
-        if (commentIds.length > 0) {
-          await Report.updateMany(
-            {
-              targetId: { $in: commentIds },
-              targetType: "Comment",
-              status: "pending",
-            },
-            {
-              $set: {
-                status: "resolved",
-                resolution:
-                  "La lista padre fue eliminada por un administrador.",
-                resolvedBy: req.user._id,
-                resolvedAt: new Date(),
-              },
-            },
-          );
-        }
       } else if (type === "comment") {
         const comment = await Comment.findById(id);
         if (!comment)
           return res.status(404).json({ error: "Comentario no encontrado" });
+        
+        const authorId = comment.author;
+        const contentPreview = comment.content.substring(0, 50) + (comment.content.length > 50 ? "..." : "");
+
         await Comment.findByIdAndDelete(id);
+
+        // Enviar notificación al autor
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+
+        await Notification.create({
+          recipient: authorId,
+          from: req.user._id,
+          type: "content_deleted",
+          title: "Tu comentario ha sido eliminado",
+          message: `Tu comentario ("${contentPreview}") ha sido eliminado por un administrador. Motivo: ${deleteReason}`,
+          expiresAt,
+          data: { type: "comment", content: contentPreview, reason: deleteReason }
+        });
 
         // Auditoría
         await AuditLog.create({
@@ -347,7 +365,7 @@ router.delete(
           action: "delete_content",
           targetId: id,
           targetType: "Comment",
-          changes: { content: comment.content },
+          changes: { content: comment.content, reason: deleteReason },
         });
 
         // Auto-resolver reportes del comentario
@@ -356,7 +374,7 @@ router.delete(
           {
             $set: {
               status: "resolved",
-              resolution: "Contenido eliminado por un administrador.",
+              resolution: `Contenido eliminado: ${deleteReason}`,
               resolvedBy: req.user._id,
               resolvedAt: new Date(),
             },
@@ -555,12 +573,12 @@ router.get("/export", verifyToken, requireAdmin, async (req, res) => {
 
     // Default: CSV
     /**
-                         * Función: escapeCsv
-             * Descripción: Función auxiliar de propósito general especializada en escape csv.
-             * Contiene lógica específica para transformar datos, realizar cálculos o
-             * conectar diferentes partes del sistema según los requisitos del módulo.
-                         */
-      const escapeCsv = (v) => {
+     * Función: escapeCsv
+     * Descripción: Función auxiliar de propósito general especializada en escape csv.
+     * Contiene lógica específica para transformar datos, realizar cálculos o
+     * conectar diferentes partes del sistema según los requisitos del módulo.
+     */
+    const escapeCsv = (v) => {
       if (v === null || v === undefined) return "";
       const s = String(v);
       if (s.includes(",") || s.includes("\n") || s.includes('"')) {
@@ -815,13 +833,13 @@ router.get(
       }
 
       /**
-                                 * Función: escapeCsv
-                 * Descripción: Función auxiliar de propósito general especializada en escape csv.
-                 * Contiene lógica específica para transformar datos, realizar cálculos
-                 * o conectar diferentes partes del sistema según los requisitos del
-                 * módulo.
-                                 */
-        const escapeCsv = (value) => {
+       * Función: escapeCsv
+       * Descripción: Función auxiliar de propósito general especializada en escape csv.
+       * Contiene lógica específica para transformar datos, realizar cálculos
+       * o conectar diferentes partes del sistema según los requisitos del
+       * módulo.
+       */
+      const escapeCsv = (value) => {
         if (value === null || value === undefined) return "";
         const text = String(value);
         if (text.includes(",") || text.includes("\n") || text.includes('"')) {
