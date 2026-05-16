@@ -81,6 +81,20 @@ router.patch("/read-all", verifyToken, async (req, res) => {
 });
 
 /**
+ * DELETE /api/notifications/all
+ * Move this before /:id to avoid conflict
+ */
+router.delete("/all", verifyToken, async (req, res) => {
+  try {
+    await Notification.deleteMany({ recipient: req.user._id });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Delete-all notifications error:", error);
+    return res.status(500).json({ error: "Error deleting notifications" });
+  }
+});
+
+/**
  * DELETE /api/notifications/:id
  */
 router.delete("/:id", verifyToken, async (req, res) => {
@@ -98,19 +112,6 @@ router.delete("/:id", verifyToken, async (req, res) => {
   } catch (error) {
     console.error("Delete notification error:", error);
     return res.status(500).json({ error: "Error deleting notification" });
-  }
-});
-
-/**
- * DELETE /api/notifications/all
- */
-router.delete("/all", verifyToken, async (req, res) => {
-  try {
-    await Notification.deleteMany({ recipient: req.user._id });
-    return res.json({ success: true });
-  } catch (error) {
-    console.error("Delete-all notifications error:", error);
-    return res.status(500).json({ error: "Error deleting notifications" });
   }
 });
 
