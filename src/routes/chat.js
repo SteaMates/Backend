@@ -348,12 +348,18 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
     }
 
     const steamData = await getSteamContextCached(steamId);
+    if (!steamData) {
+      console.warn(`[Market] No se pudo obtener el contexto de Steam para ${steamId}. ¿API Key válida?`);
+      return res.json({ deals: [], error: 'No Steam context' });
+    }
+
     const topGames = (steamData?.topGames || [])
       .map((g) => g?.name)
       .filter(Boolean)
       .slice(0, 20);
 
     if (topGames.length === 0) {
+      console.warn(`[Market] El usuario ${steamId} no tiene juegos o su perfil es privado.`);
       return res.json({ deals: [] });
     }
 
@@ -362,6 +368,8 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
     const baseURL = groq.opts?.baseURL || '';
     const isOpenRouter = baseURL.includes('openrouter.ai');
     const model = isOpenRouter ? 'meta-llama/llama-3.1-8b-instruct' : 'llama-3.1-8b-instant';
+
+    console.log(`[Market] Generando recomendaciones para ${steamId} usando ${model}...`);
 
     const completion = await groq.chat.completions.create({
       model,
@@ -390,8 +398,11 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
       .slice(0, maxItems + 8);
 
     if (recommendations.length === 0) {
+      console.warn('[Market] Groq no devolvió recomendaciones válidas.');
       return res.json({ deals: [] });
     }
+
+    console.log(`[Market] Buscando ofertas en CheapShark para ${recommendations.length} juegos...`);
 
     const seen = new Set();
     const foundDeals = [];
@@ -413,17 +424,20 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
             seen.add(bestDeal.dealID);
             foundDeals.push({ ...bestDeal, reason: rec.reason });
           }
+        } else {
+          console.error(`[Market] CheapShark respondió con error ${response.status} para ${rec.title}`);
         }
       } catch (err) {
-        console.error('Error fetching deal for:', rec.title, err.message);
+        console.error(`[Market] Error de red buscando ${rec.title}:`, err.message);
       }
 
       if (foundDeals.length >= maxItems) break;
       
-      // Basic rate limiting delay (400ms) to avoid 429 Too Many Requests
-      await new Promise(r => setTimeout(r, 400));
+      // Aumentamos el delay a 1000ms para asegurar que no nos bloqueen
+      await new Promise(r => setTimeout(r, 1000));
     }
 
+    console.log(`[Market] Éxito: ${foundDeals.length} ofertas encontradas.`);
     return res.json({ deals: foundDeals });
   } catch (error) {
     console.error('Market recommendations error:', error);
@@ -432,6 +446,7 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
     return res.status(statusCode).json({ error: message });
   }
 });
+
 
 // POST /api/chat/message - Send a message and get AI response (with optional screen context)
 router.post('/message', verifyToken, async (req, res) => {
