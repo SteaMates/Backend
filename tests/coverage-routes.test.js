@@ -1048,8 +1048,7 @@ describe("Cobertura ampliada de rutas backend", () => {
         .delete("/api/market/wishlist/wish-1")
         .set("x-test-user", "active");
 
-      expect(res.statusCode).toBe(200);
-      expect(res.body.removed).toBe(1);
+      expect(res.statusCode).toBe(204);
     });
 
     it("lista alertas de precio sin datos en vivo", async () => {
@@ -1136,8 +1135,7 @@ describe("Cobertura ampliada de rutas backend", () => {
         .delete("/api/market/alerts/alert-1")
         .set("x-test-user", "active");
 
-      expect(res.statusCode).toBe(200);
-      expect(res.body.removed).toBe(1);
+      expect(res.statusCode).toBe(204);
     });
 
     it("valida creación de alerta", async () => {
@@ -3319,7 +3317,7 @@ describe("Cobertura ampliada de rutas backend", () => {
       const res = await request(app)
         .delete("/api/market/alerts/1")
         .set("x-test-user", "active");
-      expect([200, 404, 500]).toContain(res.statusCode);
+      expect([204, 404, 500]).toContain(res.statusCode);
     });
 
     it("stats: summary error", async () => {
