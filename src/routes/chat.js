@@ -195,8 +195,8 @@ const CACHE_TTL = 5 * 60 * 1000;
 //   - La 1ª usa llama-3.3-70b-versatile, las 4 siguientes llama-4-scout-17b
 //   - Al superar el límite se devuelve 429 con la hora exacta de fin de cooldown
 // ---------------------------------------------------------------------------
-const CHAT_WINDOW_MS   = 60 * 1000; // 1 minuto
-const CHAT_MAX         = 3;
+const CHAT_WINDOW_MS = 60 * 1000; // 1 minuto
+const CHAT_MAX = 3;
 
 const userChatWindows = new Map();
 
@@ -212,7 +212,7 @@ setInterval(() => {
  * Devuelve la entrada de ventana del usuario (crea una nueva si ha expirado).
  */
 function getUserChatWindow(userId) {
-  const now   = Date.now();
+  const now = Date.now();
   const entry = userChatWindows.get(userId);
   if (!entry || now - entry.start >= CHAT_WINDOW_MS) {
     const fresh = { start: now, count: 0 };
@@ -272,7 +272,7 @@ function selectModel(windowCount, hasVision, isOpenRouter) {
  */
 async function getSteamContextCached(steamId) {
   if (!steamId) return null;
-  
+
   const cached = steamContextCache.get(steamId);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
     return cached.data;
@@ -302,7 +302,7 @@ function parseRecommendationResponse(rawText) {
          * Contiene lógica específica para transformar datos, realizar cálculos o
          * conectar diferentes partes del sistema según los requisitos del módulo.
                  */
-    const tryParse = (text) => {
+  const tryParse = (text) => {
     try {
       return JSON.parse(text);
     } catch {
@@ -350,7 +350,7 @@ function pickBestCheapSharkDeal(rawDeals) {
       (a, b) => Number.parseFloat(b?.savings || '0') - Number.parseFloat(a?.savings || '0')
     )[0];
   }
-  
+
   // Fallback if no game is technically on sale: return the one with the lowest price.
   return rawDeals.sort(
     (a, b) => Number.parseFloat(a?.salePrice || '999') - Number.parseFloat(b?.salePrice || '999')
@@ -367,14 +367,14 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
     }
 
     // Rate limit: 1 recomendación cada 5 minutos por usuario (desactivado temporalmente para pruebas)
-    // const uid = req.user?._id?.toString() || req.user?.steamId || 'anon';
-    // const limitHit = checkMarketRecsLimit(uid);
-    // if (limitHit) {
-    //   return res.status(429).json({
-    //     error: `Solo puedes actualizar las recomendaciones una vez cada 5 minutos. Vuelve a intentarlo a las ${limitHit.resetTime}.`,
-    //     retryAfter: limitHit.retryAfter,
-    //   });
-    // }
+    const uid = req.user?._id?.toString() || req.user?.steamId || 'anon';
+    const limitHit = checkMarketRecsLimit(uid);
+    if (limitHit) {
+      return res.status(429).json({
+        error: `Solo puedes actualizar las recomendaciones una vez cada 5 minutos. Vuelve a intentarlo a las ${limitHit.resetTime}.`,
+        retryAfter: limitHit.retryAfter,
+      });
+    }
 
     const maxItems = Math.min(Math.max(Number(limit) || 6, 1), 12);
 
@@ -458,7 +458,7 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
         }));
 
         const itadIds = Array.from(idMap.keys());
-        
+
         if (itadIds.length > 0) {
           // 2. Obtenemos los precios en lote (batch) para esos IDs en USD
           const overviewUrl = `https://api.isthereanydeal.com/games/overview/v2?key=${itadKey}&country=US`;
@@ -477,15 +477,17 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
               if (deal && deal.price) {
                 const steamIdMatch = deal.url.match(/\/app\/(\d+)/);
                 const steamAppId = steamIdMatch ? steamIdMatch[1] : "";
-                
+                const salePrice = deal.price.amount > 0 ? deal.price.amount.toFixed(2) : "Gratis";
+                const normalPrice = deal.regular && deal.regular.amount > 0 ? deal.regular.amount.toFixed(2) : salePrice;
+
                 foundDeals.push({
                   title: item.title || deal.shop.name,
                   steamAppID: steamAppId,
-                  thumb: steamAppId 
+                  thumb: steamAppId
                     ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${steamAppId}/header.jpg`
                     : `https://placehold.co/460x215/1e293b/94a3b8?text=${encodeURIComponent(item.title || "Game")}`,
-                  salePrice: deal.price.amount.toFixed(2),
-                  normalPrice: deal.regular ? deal.regular.amount.toFixed(2) : deal.price.amount.toFixed(2),
+                  salePrice,
+                  normalPrice,
                   savings: String(deal.cut || 0),
                   dealID: `itad_${item.id}`,
                   storeID: String(deal.shop.id),
@@ -506,7 +508,7 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
       console.log(`[Market] ITAD incompleto. Buscando el resto en Steam Store (USD)...`);
       for (const rec of recommendations) {
         if (foundDeals.length >= maxItems) break;
-        
+
         const url = new URL('https://store.steampowered.com/api/storesearch/');
         url.searchParams.set('term', rec.title);
         url.searchParams.set('l', 'spanish');
@@ -521,13 +523,16 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
               const initial = item.price?.initial || 0;
               const final = item.price?.final || 0;
               const savings = initial > 0 ? Math.round(((initial - final) / initial) * 100) : 0;
-              
+
+              const salePrice = final > 0 ? (final / 100).toFixed(2) : "Gratis";
+              const normalPrice = initial > 0 ? (initial / 100).toFixed(2) : salePrice;
+
               foundDeals.push({
                 title: item.name,
                 steamAppID: String(item.id),
                 thumb: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${item.id}/header.jpg`,
-                salePrice: final > 0 ? (final / 100).toFixed(2) : "0.00",
-                normalPrice: initial > 0 ? (initial / 100).toFixed(2) : "0.00",
+                salePrice,
+                normalPrice,
                 savings: String(savings),
                 dealID: `steam_${item.id}`,
                 storeID: "1",
@@ -613,7 +618,7 @@ router.post('/message', verifyToken, async (req, res) => {
       : getUserChatWindow(uid);
 
     if (process.env.NODE_ENV !== 'test' && chatWindow.count >= CHAT_MAX) {
-      const resetAt  = chatWindow.start + CHAT_WINDOW_MS;
+      const resetAt = chatWindow.start + CHAT_WINDOW_MS;
       const retryAfterSecs = Math.ceil((resetAt - Date.now()) / 1000);
       const resetTime = new Date(resetAt).toLocaleTimeString('es-ES', {
         hour: '2-digit', minute: '2-digit', second: '2-digit',
