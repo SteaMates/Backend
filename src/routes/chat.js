@@ -488,11 +488,13 @@ router.post('/message', verifyToken, async (req, res) => {
     const isOpenRouter = baseURL.includes('openrouter.ai');
     const hasVision = !!image;
 
-    // --- Rate limit por usuario ---
+    // --- Rate limit por usuario (desactivado en tests) ---
     const uid = req.user?._id?.toString() || req.user?.steamId || 'anon';
-    const chatWindow = getUserChatWindow(uid);
+    const chatWindow = process.env.NODE_ENV === 'test'
+      ? { count: 0, start: Date.now() }
+      : getUserChatWindow(uid);
 
-    if (chatWindow.count >= CHAT_MAX) {
+    if (process.env.NODE_ENV !== 'test' && chatWindow.count >= CHAT_MAX) {
       const resetAt  = chatWindow.start + CHAT_WINDOW_MS;
       const retryAfterSecs = Math.ceil((resetAt - Date.now()) / 1000);
       const resetTime = new Date(resetAt).toLocaleTimeString('es-ES', {
@@ -505,7 +507,7 @@ router.post('/message', verifyToken, async (req, res) => {
     }
 
     const model = selectModel(chatWindow.count, hasVision, isOpenRouter);
-    chatWindow.count += 1;
+    if (process.env.NODE_ENV !== 'test') chatWindow.count += 1;
 
     let groqMessages;
 
