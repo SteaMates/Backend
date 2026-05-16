@@ -366,15 +366,15 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'steamId is required' });
     }
 
-    // Rate limit: 1 recomendación cada 5 minutos por usuario
-    const uid = req.user?._id?.toString() || req.user?.steamId || 'anon';
-    const limitHit = checkMarketRecsLimit(uid);
-    if (limitHit) {
-      return res.status(429).json({
-        error: `Solo puedes actualizar las recomendaciones una vez cada 5 minutos. Vuelve a intentarlo a las ${limitHit.resetTime}.`,
-        retryAfter: limitHit.retryAfter,
-      });
-    }
+    // Rate limit: 1 recomendación cada 5 minutos por usuario (desactivado temporalmente para pruebas)
+    // const uid = req.user?._id?.toString() || req.user?.steamId || 'anon';
+    // const limitHit = checkMarketRecsLimit(uid);
+    // if (limitHit) {
+    //   return res.status(429).json({
+    //     error: `Solo puedes actualizar las recomendaciones una vez cada 5 minutos. Vuelve a intentarlo a las ${limitHit.resetTime}.`,
+    //     retryAfter: limitHit.retryAfter,
+    //   });
+    // }
 
     const maxItems = Math.min(Math.max(Number(limit) || 6, 1), 12);
 
