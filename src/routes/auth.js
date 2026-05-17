@@ -8,6 +8,7 @@ import passport from 'passport';
 import jwt from 'jsonwebtoken';
 import { verifyToken } from '../middleware/auth.js';
 import ModerationAction from '../models/ModerationAction.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
@@ -120,7 +121,7 @@ router.get('/steam/callback',
       });
       res.redirect(`${clientUrl}/login?${params.toString()}`);
     } catch (error) {
-      console.error('Error en callback de Steam:', error);
+      logger.error('Error en callback de Steam:', error);
       res.redirect(`${clientUrl}/login?error=auth_failed`);
     }
   }
@@ -165,7 +166,7 @@ router.get('/me', verifyToken, (req, res) => {
   };
 
   return buildResponse().catch((error) => {
-    console.error('Error obteniendo datos de sesión:', error);
+    logger.error('Error obteniendo datos de sesión:', error);
     return res.status(500).json({ error: 'Error obteniendo sesión de usuario' });
   });
 });
@@ -173,7 +174,7 @@ router.get('/me', verifyToken, (req, res) => {
 // POST /api/auth/logout - Log out
 router.post('/logout', (req, res) => {
   req.logout((err) => {
-    if (err) console.error('Error logging out passport:', err);
+    if (err) logger.error('Error logging out passport:', err);
     if (req.session) {
        req.session.destroy();
     }

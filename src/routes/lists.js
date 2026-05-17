@@ -5,6 +5,7 @@
  */
 import express from "express";
 import mongoose from "mongoose";
+import logger from "../config/logger.js";
 import GameList from "../models/GameList.js";
 import User from "../models/User.js";
 import Comment from "../models/Comment.js";
@@ -51,7 +52,7 @@ router.post("/", verifyToken, requireCanPublish, async (req, res) => {
 
     res.status(201).json(savedList);
   } catch (error) {
-    console.error("Error creating list:", error);
+    logger.error("Error creating list:", error);
     res.status(500).json({ error: "Failed to create game list" });
   }
 });
@@ -99,7 +100,7 @@ router.get("/", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error fetching lists:", error);
+    logger.error("Error fetching lists:", error);
     res.status(500).json({ error: "Failed to fetch game lists" });
   }
 });
@@ -122,7 +123,7 @@ router.get("/:id", async (req, res) => {
 
     res.json(list);
   } catch (error) {
-    console.error("Error fetching list details:", error);
+    logger.error("Error fetching list details:", error);
     res.status(500).json({ error: "Failed to fetch game list" });
   }
 });
@@ -154,7 +155,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
 
     res.json({ message: "List deleted successfully" });
   } catch (error) {
-    console.error("Error deleting list:", error);
+    logger.error("Error deleting list:", error);
     res.status(500).json({ error: "Failed to delete list" });
   }
 });
@@ -198,7 +199,7 @@ router.get("/:id/comments", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error fetching comments:", error);
+    logger.error("Error fetching comments:", error);
     res.status(500).json({ error: "Failed to fetch comments" });
   }
 });
@@ -289,7 +290,7 @@ router.post(
 
       res.status(201).json(saved);
     } catch (error) {
-      console.error("Error adding comment:", error);
+      logger.error("Error adding comment:", error);
       res.status(500).json({ error: "Failed to add comment" });
     }
   },
@@ -343,7 +344,7 @@ router.post("/:id/like", verifyToken, async (req, res) => {
 
     res.json({ likes: list.likes, dislikes: list.dislikes });
   } catch (error) {
-    console.error("Error toggling like:", error);
+    logger.error("Error toggling like:", error);
     res.status(500).json({ error: "Failed to toggle like" });
   }
 });
@@ -377,7 +378,7 @@ router.post("/:id/dislike", verifyToken, async (req, res) => {
     await list.save();
     res.json({ likes: list.likes, dislikes: list.dislikes });
   } catch (error) {
-    console.error("Error toggling dislike:", error);
+    logger.error("Error toggling dislike:", error);
     res.status(500).json({ error: "Failed to toggle dislike" });
   }
 });

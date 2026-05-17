@@ -6,6 +6,7 @@
 import passport from 'passport';
 import SteamStrategy from 'passport-steam';
 import User from '../models/User.js';
+import logger from './logger.js';
 
 /**
  * Función: configureSteamStrategy
@@ -33,8 +34,8 @@ export function configureSteamStrategy() {
   const serverPort = process.env.PORT || 3001;
 
   if (!steamApiKey || steamApiKey === 'your_steam_api_key_here') {
-    console.warn('⚠️  STEAM_API_KEY not configured. Steam login will not work.');
-    console.warn('   Get your key at: https://steamcommunity.com/dev/apikey');
+    logger.warn('STEAM_API_KEY not configured. Steam login will not work.');
+    logger.warn('Get your key at: https://steamcommunity.com/dev/apikey');
     return;
   }
 
@@ -60,7 +61,7 @@ export function configureSteamStrategy() {
             profileUrl: profile._json?.profileurl || '',
             realName: profile._json?.realname || '',
           });
-          console.log(`New user created: ${profile.displayName} (${steamId})`);
+          logger.info(`New user created: ${profile.displayName} (${steamId})`);
         } else {
           // Update profile info on login
           user.username = profile.displayName;

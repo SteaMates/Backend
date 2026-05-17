@@ -4,6 +4,7 @@
  * Autor: Adrián Artigas Subiras, Adrián Becerril Granada, Pablo Nicolás Fabra Roque, Enrique Baldovin Cotela, Adrián Nasarre
  */
 import mongoose from 'mongoose';
+import logger from './logger.js';
 
 /**
  * Función: connectDB
@@ -15,9 +16,9 @@ export async function connectDB() {
   try {
     const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/steamates';
     await mongoose.connect(uri);
-    console.log('✅ Connected to MongoDB');
+    logger.info('Connected to MongoDB');
   } catch (error) {
-    console.error('❌ MongoDB connection error:', error.message);
+    logger.error(`MongoDB connection error: ${error.message}`);
     process.exit(1);
   }
 }

@@ -6,6 +6,7 @@
 import express from "express";
 import { verifyToken } from "../middleware/auth.js";
 import Report from "../models/Report.js";
+import logger from "../config/logger.js";
 import GameList from "../models/GameList.js";
 import Comment from "../models/Comment.js";
 import User from "../models/User.js";
@@ -78,7 +79,7 @@ router.post("/", verifyToken, async (req, res) => {
       return res.status(409).json({ error: "Ya reportaste este contenido" });
     }
 
-    console.error("Error creando reporte:", error);
+    logger.error("Error creando reporte:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 });

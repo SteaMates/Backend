@@ -8,6 +8,7 @@ import GameCache from "../models/GameCache.js";
 import { verifyToken } from "../middleware/auth.js";
 import { validateSteamIdsPayload } from "../validation/validators.js";
 import { STEAM_API_BASE, getSteamApiKey, fetchOwnedGames } from "../utils/steam-utils.js";
+import logger from "../config/logger.js";
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ async function computeLibraryValue(games) {
     const missingCount = games.length - cachedGames.length;
     if (missingCount > 0) libraryValue += missingCount * 10;
   } catch (e) {
-    console.error("Error computing library value:", e);
+    logger.error("Error computing library value:", e);
   }
   if (libraryValue === 0 && games.length > 0) libraryValue = games.length * 15;
   return Math.round(libraryValue);
@@ -74,7 +75,7 @@ router.get("/games/:steamId", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Steam games error:", error);
+    logger.error("Steam games error:", error);
     return res.status(500).json({ error: "Error fetching Steam games" });
   }
 });
@@ -112,7 +113,7 @@ router.get("/me/games", verifyToken, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Steam self games error:", error);
+    logger.error("Steam self games error:", error);
     return res.status(500).json({ error: "Error fetching Steam games" });
   }
 });
@@ -142,7 +143,7 @@ router.get("/recent/:steamId", async (req, res) => {
 
     return res.json({ totalCount: data.response?.total_count || 0, games });
   } catch (error) {
-    console.error("Steam recent games error:", error);
+    logger.error("Steam recent games error:", error);
     return res.status(500).json({ error: "Error fetching recent games" });
   }
 });
@@ -176,7 +177,7 @@ router.get("/me/recent", verifyToken, async (req, res) => {
 
     return res.json({ totalCount: data.response?.total_count || 0, games });
   } catch (error) {
-    console.error("Steam self recent games error:", error);
+    logger.error("Steam self recent games error:", error);
     return res.status(500).json({ error: "Error fetching recent games" });
   }
 });
@@ -221,7 +222,7 @@ router.post("/common-games", async (req, res) => {
 
     return res.json({ games });
   } catch (error) {
-    console.error("Common games error:", error);
+    logger.error("Common games error:", error);
     return res.status(500).json({ error: "Error fetching common games" });
   }
 });
@@ -268,13 +269,13 @@ router.post("/games-info", async (req, res) => {
         }
         await new Promise((resolve) => setTimeout(resolve, 300));
       } catch (err) {
-        console.error("Steam app metadata error for " + appId, err);
+        logger.error("Steam app metadata error for " + appId, err);
       }
     }
 
     return res.json(cachedMap);
   } catch (error) {
-    console.error("Games-info error:", error);
+    logger.error("Games-info error:", error);
     return res.status(500).json({ error: "Error fetching game information" });
   }
 });

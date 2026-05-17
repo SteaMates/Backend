@@ -9,6 +9,7 @@ import Notification from "../models/Notification.js";
 import User from "../models/User.js";
 import { verifyToken } from "../middleware/auth.js";
 import { validateSessionCreate } from "../validation/validators.js";
+import logger from "../config/logger.js";
 
 const router = express.Router();
 
@@ -177,7 +178,7 @@ router.post("/", verifyToken, async (req, res) => {
 
     return res.json({ session: populated });
   } catch (error) {
-    console.error("Create session error:", error);
+    logger.error("Create session error:", error);
     return res.status(500).json({ error: "Error creating session" });
   }
 });
@@ -197,7 +198,7 @@ router.get("/mine", verifyToken, async (req, res) => {
 
     return res.json({ sessions });
   } catch (error) {
-    console.error("List sessions error:", error);
+    logger.error("List sessions error:", error);
     return res.status(500).json({ error: "Error fetching sessions" });
   }
 });
@@ -268,7 +269,7 @@ router.patch("/:id/respond", verifyToken, async (req, res) => {
 
     return res.json({ session: updated });
   } catch (error) {
-    console.error("Respond session error:", error);
+    logger.error("Respond session error:", error);
     return res.status(500).json({ error: "Error responding to session" });
   }
 });
@@ -335,7 +336,7 @@ router.patch("/:id/leave", verifyToken, async (req, res) => {
 
     return res.json({ session: updated });
   } catch (error) {
-    console.error("Leave session error:", error);
+    logger.error("Leave session error:", error);
     return res.status(500).json({ error: "Error leaving session" });
   }
 });
@@ -397,7 +398,7 @@ router.patch("/:id/cancel", verifyToken, async (req, res) => {
 
     return res.json({ session: updated });
   } catch (error) {
-    console.error("Cancel session error:", error);
+    logger.error("Cancel session error:", error);
     return res.status(500).json({ error: "Error cancelling session" });
   }
 });

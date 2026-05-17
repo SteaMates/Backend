@@ -8,6 +8,7 @@ import User from "../models/User.js";
 import GameList from "../models/GameList.js";
 import GameCache from "../models/GameCache.js";
 import GamingSession from "../models/GamingSession.js";
+import logger from "../config/logger.js";
 
 const router = express.Router();
 // GET /api/site/stats
@@ -24,7 +25,7 @@ router.get("/stats", async (req, res) => {
       sessionsOrganized,
     });
   } catch (error) {
-    console.error("Site stats error:", error);
+    logger.error("Site stats error:", error);
     res.status(500).json({ error: "Error fetching site stats" });
   }
 });

@@ -5,6 +5,7 @@
  */
 import express from "express";
 import { STEAM_API_BASE, getSteamApiKey, getItadApiKey } from "../utils/steam-utils.js";
+import logger from "../config/logger.js";
 
 const router = express.Router();
 
@@ -173,7 +174,7 @@ router.get("/friends/:steamId", async (req, res) => {
 
     return res.json({ friends });
   } catch (error) {
-    console.error("Steam friends error:", error);
+    logger.error("Steam friends error:", error);
     return res.status(500).json({ error: "Error fetching Steam friends" });
   }
 });
@@ -240,7 +241,7 @@ router.get("/itad/history", async (req, res) => {
     const points = normalizeItadHistory(await historyRes.json());
     return res.json({ gameId, source: "isthereanydeal", points });
   } catch (error) {
-    console.error("IsThereAnyDeal history error:", error);
+    logger.error("IsThereAnyDeal history error:", error);
     return res.status(500).json({ error: "Error fetching IsThereAnyDeal history" });
   }
 });

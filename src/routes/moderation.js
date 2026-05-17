@@ -6,6 +6,7 @@
 import express from "express";
 import { verifyToken } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/adminAuth.js";
+import logger from "../config/logger.js";
 import Report from "../models/Report.js";
 import ModerationAction from "../models/ModerationAction.js";
 import AuditLog from "../models/AuditLog.js";
@@ -174,7 +175,7 @@ router.post("/reports", verifyToken, async (req, res) => {
     if (error?.code === 11000) {
       return res.status(409).json({ error: "Ya reportaste este contenido" });
     }
-    console.error("Error creando reporte:", error);
+    logger.error("Error creando reporte:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -217,7 +218,7 @@ router.get("/reports", verifyToken, requireAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error listando reportes:", error);
+    logger.error("Error listando reportes:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -256,7 +257,7 @@ router.get("/stats", verifyToken, requireAdmin, async (req, res) => {
       banned: bannedUsers,
     });
   } catch (error) {
-    console.error("Error obteniendo estadísticas de moderación:", error);
+    logger.error("Error obteniendo estadísticas de moderación:", error);
     // Return zeros instead of error to prevent admin UI crash
     res.json({
       pending: 0,
@@ -386,7 +387,7 @@ router.delete(
 
       res.json({ success: true });
     } catch (error) {
-      console.error("Error eliminando contenido:", error);
+      logger.error("Error eliminando contenido:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -444,7 +445,7 @@ router.put("/reports/:id", verifyToken, requireAdmin, async (req, res) => {
 
     res.json({ success: true, report: updatedReport });
   } catch (error) {
-    console.error("Error resolviendo reporte:", error);
+    logger.error("Error resolviendo reporte:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -598,7 +599,7 @@ router.get("/export", verifyToken, requireAdmin, async (req, res) => {
     );
     res.send(csv);
   } catch (error) {
-    console.error("Error exporting data:", error);
+    logger.error("Error exporting data:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -726,7 +727,7 @@ router.post("/actions", verifyToken, requireAdmin, async (req, res) => {
 
     res.status(201).json({ success: true, modAction, userStatus: newStatus });
   } catch (error) {
-    console.error("Error aplicando sanción:", error);
+    logger.error("Error aplicando sanción:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -748,7 +749,7 @@ router.get("/user/:userId", verifyToken, requireAdmin, async (req, res) => {
 
     res.json({ actions });
   } catch (error) {
-    console.error("Error obteniendo historial:", error);
+    logger.error("Error obteniendo historial:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -858,7 +859,7 @@ router.get(
       );
       res.send(csvLines.join("\n"));
     } catch (error) {
-      console.error("Error exportando historial de usuario:", error);
+      logger.error("Error exportando historial de usuario:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -893,7 +894,7 @@ router.get("/audit-log", verifyToken, requireAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error obteniendo audit log:", error);
+    logger.error("Error obteniendo audit log:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -939,7 +940,7 @@ router.get("/users", verifyToken, requireAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error listando usuarios:", error);
+    logger.error("Error listando usuarios:", error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -7,6 +7,7 @@
 import express from "express";
 import * as cheerio from "cheerio";
 import GameCache from "../models/GameCache.js";
+import logger from "../config/logger.js";
 
 const router = express.Router();
 
@@ -54,7 +55,7 @@ router.get("/search", async (req, res) => {
 
     return res.json(games);
   } catch (error) {
-    console.error("Steam search error:", error);
+    logger.error("Steam search error:", error);
     return res.status(500).json({ error: "Error searching games" });
   }
 });
@@ -100,7 +101,7 @@ router.get("/free-games", async (req, res) => {
 
     return res.json({ games, hasMore: (data.total_count ?? 0) > start + 40 });
   } catch (error) {
-    console.error("Steam free-games error:", error);
+    logger.error("Steam free-games error:", error);
     return res.status(500).json({ error: "Error fetching free games" });
   }
 });
@@ -185,7 +186,7 @@ router.get("/by-tags", async (req, res) => {
 
     return res.json({ games, hasMore: (data.total_count ?? 0) > start + 40 });
   } catch (error) {
-    console.error("Steam by-tags error:", error);
+    logger.error("Steam by-tags error:", error);
     return res.status(500).json({ error: "Error fetching games by tags" });
   }
 });
@@ -228,7 +229,7 @@ router.get("/most-played", async (req, res) => {
       hasMore: start + 40 < top100Cache.data.length,
     });
   } catch (error) {
-    console.error("Steam most-played error:", error);
+    logger.error("Steam most-played error:", error);
     return res.status(500).json({ error: "Error fetching most played games" });
   }
 });
@@ -286,14 +287,14 @@ router.get("/tags", async (req, res) => {
               { upsert: true, new: true },
             );
           } catch (err) {
-            console.error(`SteamSpy tags error for ${appId}:`, err.message);
+            logger.error(`SteamSpy tags error for ${appId}:`, err.message);
           }
           await new Promise((r) => setTimeout(r, 1050)); // SteamSpy: 1 req/s
         }
-      })().catch((err) => console.error("Background tags fetch error:", err));
+      })().catch((err) => logger.error("Background tags fetch error:", err));
     }
   } catch (error) {
-    console.error("Steam tags error:", error);
+    logger.error("Steam tags error:", error);
     return res.status(500).json({ error: "Error fetching game tags" });
   }
 });
@@ -332,7 +333,7 @@ router.get("/app/:appId", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Steam app details error:", error);
+    logger.error("Steam app details error:", error);
     return res.status(500).json({ error: "Error fetching Steam app details" });
   }
 });
@@ -353,7 +354,7 @@ router.get("/players/:appId", async (req, res) => {
       result: data.response?.result || 0,
     });
   } catch (error) {
-    console.error("Steam player count error:", error);
+    logger.error("Steam player count error:", error);
     return res.status(500).json({ error: "Error fetching Steam player count" });
   }
 });

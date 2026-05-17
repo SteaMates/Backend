@@ -7,6 +7,7 @@ import express from "express";
 import GameCache from "../models/GameCache.js";
 import { verifyToken } from "../middleware/auth.js";
 import { validateSteamIdsPayload } from "../validation/validators.js";
+import logger from "../config/logger.js";
 
 const router = express.Router();
 const STEAM_API_BASE = "https://api.steampowered.com";
@@ -67,7 +68,7 @@ async function getGameGenres(appId) {
 
     return gameDoc;
   } catch (error) {
-    console.error(`Error fetching store data for app ${appId}:`, error.message);
+    logger.error(`Error fetching store data for app ${appId}: ${error.message}`);
     return null;
   }
 }
@@ -441,7 +442,7 @@ router.get("/time/:steamId", async (req, res) => {
       gamesOwned: games.length,
     });
   } catch (error) {
-    console.error("Stats time error:", error);
+    logger.error("Stats time error:", error);
     res.status(500).json({ error: "Error fetching time stats" });
   }
 });
@@ -523,7 +524,7 @@ router.get("/me/genres", verifyToken, async (req, res) => {
 
     res.json({ genres, totalHours });
   } catch (error) {
-    console.error("Stats self genres error:", error);
+    logger.error("Stats self genres error:", error);
     res.status(500).json({ error: "Error fetching genre stats" });
   }
 });
@@ -599,7 +600,7 @@ router.get("/genres/:steamId", async (req, res) => {
 
     res.json({ genres, totalHours });
   } catch (error) {
-    console.error("Stats genres error:", error);
+    logger.error("Stats genres error:", error);
     res.status(500).json({ error: "Error fetching genre stats" });
   }
 });
@@ -748,7 +749,7 @@ router.get("/me/achievements", verifyToken, async (req, res) => {
       recentAchievementsList: recentArray,
     });
   } catch (error) {
-    console.error("Stats self achievements error:", error);
+    logger.error("Stats self achievements error:", error);
     res.status(500).json({ error: "Error fetching achievement stats" });
   }
 });
@@ -895,7 +896,7 @@ router.get("/achievements/:steamId", async (req, res) => {
       recentAchievementsList: recentArray,
     });
   } catch (error) {
-    console.error("Stats achievements error:", error);
+    logger.error("Stats achievements error:", error);
     res.status(500).json({ error: "Error fetching achievement stats" });
   }
 });
@@ -977,7 +978,7 @@ router.post("/compare", async (req, res) => {
 
     res.json({ players });
   } catch (error) {
-    console.error("Stats compare error:", error);
+    logger.error("Stats compare error:", error);
     res.status(500).json({ error: "Error fetching compare stats" });
   }
 });

@@ -6,6 +6,7 @@
 import express from "express";
 
 import { randomUUID } from "crypto";
+import logger from "../config/logger.js";
 import { verifyToken } from "../middleware/auth.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
@@ -430,7 +431,7 @@ router.get("/wishlist", verifyToken, async (req, res) => {
     }
     return res.json({ wishlist: enrichWithLiveData(wishlist, liveDataMap) });
   } catch (error) {
-    console.error("Wishlist list error:", error);
+    logger.error("Wishlist list error:", error);
     return res.status(500).json({ error: "Error fetching wishlist" });
   }
 });
@@ -479,7 +480,7 @@ router.post("/wishlist", verifyToken, async (req, res) => {
 
     return res.status(201).json({ wishlistItem, existed: false });
   } catch (error) {
-    console.error("Wishlist create error:", error);
+    logger.error("Wishlist create error:", error);
     return res.status(500).json({ error: "Error adding wishlist item" });
   }
 });
@@ -512,7 +513,7 @@ router.delete("/wishlist/:id", verifyToken, async (req, res) => {
 
     return res.status(204).end();
   } catch (error) {
-    console.error("Wishlist delete error:", error);
+    logger.error("Wishlist delete error:", error);
     return res.status(500).json({ error: "Error removing wishlist item" });
   }
 });
@@ -625,7 +626,7 @@ router.get("/alerts", verifyToken, async (req, res) => {
 
     return res.json({ alerts: enrichedAlerts });
   } catch (error) {
-    console.error("Price alerts list error:", error);
+    logger.error("Price alerts list error:", error);
     return res.status(500).json({ error: "Error fetching price alerts" });
   }
 });
@@ -701,7 +702,7 @@ router.post("/alerts", verifyToken, async (req, res) => {
       .status(201)
       .json({ alert: user.priceAlerts[0], existed: false, triggeredNow });
   } catch (error) {
-    console.error("Price alert create error:", error);
+    logger.error("Price alert create error:", error);
     return res.status(500).json({ error: "Error creating price alert" });
   }
 });
@@ -765,7 +766,7 @@ router.patch("/alerts/:id", verifyToken, async (req, res) => {
 
     return res.json({ alert: user.priceAlerts[index], triggeredNow });
   } catch (error) {
-    console.error("Price alert update error:", error);
+    logger.error("Price alert update error:", error);
     return res.status(500).json({ error: "Error updating price alert" });
   }
 });
@@ -798,7 +799,7 @@ router.delete("/alerts/:id", verifyToken, async (req, res) => {
 
     return res.status(204).end();
   } catch (error) {
-    console.error("Price alert delete error:", error);
+    logger.error("Price alert delete error:", error);
     return res.status(500).json({ error: "Error deleting price alert" });
   }
 });

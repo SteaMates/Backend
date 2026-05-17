@@ -7,6 +7,7 @@ import express from "express";
 import Groq from 'groq-sdk';
 import ChatSession from '../models/ChatSession.js';
 import { verifyToken } from '../middleware/auth.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 const STEAM_API_BASE = 'https://api.steampowered.com';
@@ -113,7 +114,7 @@ async function fetchSteamContext(steamId) {
           friendProfiles = fpData.response?.players || [];
         }
       } catch (err) {
-        console.error('Error fetching friend profiles:', err.message);
+        logger.error('Error fetching friend profiles:', err.message);
       }
     }
 
@@ -124,7 +125,7 @@ async function fetchSteamContext(steamId) {
 
     return { profile, topGames, recentGames, friendProfiles, totalGames: allGames.length };
   } catch (error) {
-    console.error('Error fetching Steam context:', error);
+    logger.error('Error fetching Steam context:', error);
     return null;
   }
 }
@@ -432,7 +433,7 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
       return res.json({ deals: [] });
     }
 
-    console.log(`[Market] Buscando ofertas en IsThereAnyDeal (ITAD) para ${recommendations.length} juegos...`);
+    logger.info(`[Market] Buscando ofertas en IsThereAnyDeal (ITAD) para ${recommendations.length} juegos...`);
 
     const itadKey = process.env.ITAD_API_KEY;
     const seen = new Set();
@@ -453,7 +454,7 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
               }
             }
           } catch (e) {
-            console.error(`[Market] ITAD Search Error para ${rec.title}:`, e.message);
+            logger.error(`[Market] ITAD Search Error para ${rec.title}:`, e.message);
           }
         }));
 
@@ -499,13 +500,13 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
           }
         }
       } catch (err) {
-        console.error('[Market] Error general en ITAD:', err.message);
+        logger.error('[Market] Error general en ITAD:', err.message);
       }
     }
 
     // 3. Fallback a Steam Store si ITAD no basta o falla
     if (foundDeals.length < maxItems) {
-      console.log(`[Market] ITAD incompleto. Buscando el resto en Steam Store (USD)...`);
+      logger.info(`[Market] ITAD incompleto. Buscando el resto en Steam Store (USD)...`);
       for (const rec of recommendations) {
         if (foundDeals.length >= maxItems) break;
 
@@ -549,7 +550,7 @@ router.post('/market-recommendations', verifyToken, async (req, res) => {
     return res.json({ deals: foundDeals });
 
   } catch (error) {
-    console.error('Market recommendations error:', error);
+    logger.error('Market recommendations error:', error);
     const statusCode = error?.status || 500;
     const message = error?.message || 'Error generating market recommendations';
     return res.status(statusCode).json({ error: message });
@@ -682,7 +683,7 @@ router.post('/message', verifyToken, async (req, res) => {
       sessionId: session._id,
     });
   } catch (error) {
-    console.error('Chat error:', error);
+    logger.error('Chat error:', error);
 
     if (error?.status === 401) {
       return res.status(401).json({ error: 'Invalid Groq API key' });

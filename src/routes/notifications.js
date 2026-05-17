@@ -6,6 +6,7 @@
 import express from "express";
 import Notification from "../models/Notification.js";
 import { verifyToken } from "../middleware/auth.js";
+import logger from "../config/logger.js";
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get("/", verifyToken, async (req, res) => {
 
     return res.json({ notifications });
   } catch (error) {
-    console.error("List notifications error:", error);
+    logger.error("List notifications error:", error);
     return res.status(500).json({ error: "Error fetching notifications" });
   }
 });
@@ -58,7 +59,7 @@ router.patch("/:id/read", verifyToken, async (req, res) => {
 
     return res.json({ notification: n });
   } catch (error) {
-    console.error("Read notification error:", error);
+    logger.error("Read notification error:", error);
     return res.status(500).json({ error: "Error updating notification" });
   }
 });
@@ -75,7 +76,7 @@ router.patch("/read-all", verifyToken, async (req, res) => {
 
     return res.json({ success: true, modified: result.modifiedCount || 0 });
   } catch (error) {
-    console.error("Read-all notifications error:", error);
+    logger.error("Read-all notifications error:", error);
     return res.status(500).json({ error: "Error updating notifications" });
   }
 });
@@ -89,7 +90,7 @@ router.delete("/all", verifyToken, async (req, res) => {
     await Notification.deleteMany({ recipient: req.user._id });
     return res.json({ success: true });
   } catch (error) {
-    console.error("Delete-all notifications error:", error);
+    logger.error("Delete-all notifications error:", error);
     return res.status(500).json({ error: "Error deleting notifications" });
   }
 });
@@ -110,7 +111,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
 
     return res.json({ success: true });
   } catch (error) {
-    console.error("Delete notification error:", error);
+    logger.error("Delete notification error:", error);
     return res.status(500).json({ error: "Error deleting notification" });
   }
 });

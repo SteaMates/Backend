@@ -11,6 +11,7 @@ import MongoStore from "connect-mongo";
 import passport from "passport";
 import { connectDB } from "./config/database.js";
 import { configureSteamStrategy } from "./config/passport.js";
+import logger, { httpLogger } from "./config/logger.js";
 
 import authRoutes from "./routes/auth.js";
 import chatRoutes from "./routes/chat.js";
@@ -102,6 +103,7 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(httpLogger);
 
 // Session (required for Passport Steam)
 app.set("trust proxy", 1);
@@ -161,8 +163,8 @@ app.get("/api/health", (req, res) => {
 // SOLO SE INICIA EL SERVIDOR SI NO ESTAMOS PASANDO LOS TESTS
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(
-      `🚀 SteaMates server running on port ${PORT} [${
+    logger.info(
+      `SteaMates server running on port ${PORT} [${
         process.env.NODE_ENV || "development"
       }]`,
     );
