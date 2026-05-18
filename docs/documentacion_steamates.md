@@ -221,7 +221,7 @@ y reason (una frase). Solo devuelve JSON.
 
 Para asegurar la calidad y fiabilidad de SteaMates se ha implementado una estrategia de pruebas automatizadas que abarca tanto el frontend (E2E) como el backend (integración + unitarias).
 
-**Total: 250 pruebas automatizadas** (más 4 scripts auxiliares/manuales).
+**Total: 252 pruebas automatizadas** (los scripts de prueba auxiliares/manuales temporales de desarrollo se depuraron al final para mantener el repositorio limpio).
 
 ### Resumen
 
@@ -229,10 +229,9 @@ Para asegurar la calidad y fiabilidad de SteaMates se ha implementado una estrat
 |---|---|---|
 | Backend | API / integración + unitaria (rutas) | 215 |
 | Backend | Unitaria / modelo | 12 |
-| Backend | Unitaria / validación | 14 |
+| Backend | Unitaria / validación | 16 |
 | Frontend | E2E / interfaz | 9 |
-| **Total automatizadas** | | **250** |
-| General | Scripts auxiliares/manuales | 4 |
+| **Total automatizadas** | | **252** |
 
 ---
 
@@ -369,7 +368,7 @@ test.describe('Navegación General', () => {
 
 ### 10.2 Pruebas de Integración y API en el Backend — Jest + Supertest
 
-En lugar de pruebas manuales en Postman, se ha optado por un enfoque programático con **Jest** y **Supertest**, validando la API automáticamente en cada ejecución. Se han implementado **241 tests de backend** que cubren:
+En lugar de pruebas manuales en Postman, se ha optado por un enfoque programático con **Jest** y **Supertest**, validando la API automáticamente en cada ejecución. Se han implementado **243 tests de backend** que cubren:
 
 - **Pruebas de Rutas (Endpoints):** códigos de estado HTTP (200, 400, 401, 500) y estructura de respuestas JSON en todos los módulos (`/api/steam`, `/api/lists`, `/api/market`, etc.). Se simulan happy paths y escenarios de error, incluyendo fallos en APIs externas.
 - **Pruebas de Modelos de Datos:** verificación del esquema MongoDB/Mongoose (campos obligatorios, valores por defecto, restricciones de unicidad).
@@ -397,19 +396,14 @@ En lugar de pruebas manuales en Postman, se ha optado por un enfoque programáti
 | T-091–T-102 | Backend | API / integración | `coverage-routes.test.js` | `/api/chat` — IA, historial, visión | ✅ Correctas |
 | T-103–T-215 | Backend | API / integración | `coverage-routes.test.js` | `/api/steam` — perfiles, juegos, tags, stats | ✅ Correctas |
 | T-216–T-227 | Backend | Unitaria / modelo | `models.test.js` | Esquemas Mongoose (12 modelos) | ✅ Correctas |
-| T-228–T-241 | Backend | Unitaria / validación | `validation.test.js` | Validadores de request (14 casos) | ✅ Correctas |
-| T-242–T-243 | Frontend | E2E | `auth.spec.ts` | Login y modal de ban | ✅ Correctas |
-| T-244–T-245 | Frontend | E2E | `lists.spec.ts` | Vista de listas y modal de creación | ✅ Correctas |
-| T-246–T-250 | Frontend | E2E | `navigation.spec.ts` | Navegación a Home, Mercado, Listas, Amigos, Perfil | ✅ Correctas |
+| T-228–T-243 | Backend | Unitaria / validación | `validation.test.js` | Validadores de request (16 casos, incluyendo nuevas pruebas de coverImage Base64) | ✅ Correctas |
+| T-244–T-245 | Frontend | E2E | `auth.spec.ts` | Login y modal de ban | ✅ Correctas |
+| T-246–T-247 | Frontend | E2E | `lists.spec.ts` | Vista de listas y modal de creación | ✅ Correctas |
+| T-248–T-252 | Frontend | E2E | `navigation.spec.ts` | Navegación a Home, Mercado, Listas, Amigos, Perfil | ✅ Correctas |
 
-#### Scripts auxiliares de comprobación
+#### Scripts auxiliares de comprobación (Históricos)
 
-| ID | Tipo | Archivo | Prueba realizada |
-|---|---|---|---|
-| M-001 | Auxiliar / manual | `test.js` | Consulta a Steam para obtener juegos de un usuario |
-| M-002 | Auxiliar / manual | `Backend/test.js` | Obtención de juegos principales y logros desde Steam API |
-| M-003 | Auxiliar / manual | `Backend/test-groq.js` | Conexión con Groq y generación de respuesta IA/visión |
-| M-004 | Auxiliar / manual | `Frontend/test.js` | Carga de la clave `STEAM_API_KEY` desde el entorno |
+> **Nota de limpieza:** Los scripts auxiliares y archivos de prueba temporales (`test.js`, `test-groq.js`, `fix.js`, etc.) utilizados durante el desarrollo fueron depurados y eliminados en el último commit para mantener el repositorio limpio, ligero y libre de código muerto (*dead code*).
 
 ---
 
@@ -458,7 +452,7 @@ jobs:
 
 ### Opcional B — Cobertura de código ≥ 75 % en Backend *(Rubric #7 — máx. 1 punto)*
 
-Se ha superado el umbral exigido del 75 % en todas las métricas principales (datos obtenidos ejecutando `npm run test:coverage` sobre el estado actual del repositorio — 4 suites, **241 tests pasados**):
+Se ha superado el umbral exigido del 75 % en todas las métricas principales (datos obtenidos ejecutando `npm run test:coverage` sobre el estado actual del repositorio — 4 suites, **243 tests pasados**):
 
 | Métrica | Resultado |
 |---|---|
@@ -508,9 +502,9 @@ Se ha implementado una suite de pruebas E2E con **Playwright** (`@playwright/tes
 | Listas | `lists.spec.ts` | 2 | Vista general, modal de creación de lista |
 | Navegación | `navigation.spec.ts` | 5 | Routing a Home, Mercado, Listas, Amigos, Perfil |
 
-Adicionalmente, el backend cuenta con **241 tests** de integración de API con **Jest + Supertest** (215 de rutas + 12 de modelos + 14 de validación) que cubren todos los endpoints (`/api/steam`, `/api/lists`, `/api/market`, `/api/chat`, `/api/moderation`, etc.), validando códigos de estado, estructura de respuestas y comportamiento ante errores.
+Adicionalmente, el backend cuenta con **243 tests** de integración de API con **Jest + Supertest** (215 de rutas + 12 de modelos + 16 de validación) que cubren todos los endpoints (`/api/steam`, `/api/lists`, `/api/market`, `/api/chat`, `/api/moderation`, etc.), validando códigos de estado, estructura de respuestas y comportamiento ante errores.
 
-El conjunto supera ampliamente el mínimo de 2 pruebas E2E exigido: **9 E2E de frontend + 241 de backend = 250 pruebas automatizadas en total**.
+El conjunto supera ampliamente el mínimo de 2 pruebas E2E exigido: **9 E2E de frontend + 243 de backend = 252 pruebas automatizadas en total**.
 
 ---
 
@@ -600,7 +594,7 @@ La valoración global del proyecto es positiva. La plataforma permite autenticar
 
 Desde el punto de vista técnico, el proyecto ha supuesto un reto importante por la integración de distintos servicios externos —especialmente la Steam Web API, con sus restricciones de privacidad y rate limiting— y por la necesidad de coordinar correctamente el front-end, el back-end y la base de datos. A pesar de ello, se ha conseguido una arquitectura modular y organizada, separando rutas, modelos, validadores, middlewares, componentes y servicios.
 
-También se valora positivamente el trabajo realizado en validación y testing: se han añadido validaciones tanto en front-end como en back-end, y se han realizado pruebas automatizadas de API, backend (241 tests con Jest/Supertest) y flujos básicos E2E del front-end (9 tests con Playwright). Esto ha permitido comprobar que las funcionalidades principales funcionan correctamente y mantener una cobertura de sentencias del **76.67 %** en el backend.
+También se valora positivamente el trabajo realizado en validación y testing: se han añadido validaciones tanto en front-end como en back-end, y se han realizado pruebas automatizadas de API, backend (243 tests con Jest/Supertest) y flujos básicos E2E del front-end (9 tests con Playwright). Esto ha permitido comprobar que las funcionalidades principales funcionan correctamente y mantener una cobertura de sentencias del **76.67 %** en el backend.
 
 El uso de herramientas profesionales —GitHub Actions para CI/CD, ESLint para análisis estático, MongoDB TTL indexes para gestión de notificaciones, y Groq con modelos Llama multimodales para la IA— refleja un nivel de madurez técnica significativo para el ámbito del proyecto.
 
