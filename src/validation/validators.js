@@ -142,8 +142,15 @@ export function validateListCreate(body) {
   }
 
   const coverImage = trimValue(body?.coverImage);
-  if (coverImage && coverImage.length > MAX_URL_LENGTH) {
-    addError(errors, "coverImage", "too_long", "coverImage is too long");
+  if (coverImage) {
+    if (coverImage.startsWith("data:image/")) {
+      const MAX_BASE64_LENGTH = 14 * 1024 * 1024;
+      if (coverImage.length > MAX_BASE64_LENGTH) {
+        addError(errors, "coverImage", "too_long", "coverImage base64 string is too large");
+      }
+    } else if (coverImage.length > MAX_URL_LENGTH) {
+      addError(errors, "coverImage", "too_long", "coverImage is too long");
+    }
   }
 
   const gamesRaw = body?.games;

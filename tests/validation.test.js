@@ -32,6 +32,31 @@ describe("Request validators", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("validateListCreate accepts base64 coverImage", () => {
+    const base64Image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const result = validateListCreate({
+      title: "Lista de prueba",
+      description: "Descripcion valida",
+      categories: ["RPG"],
+      coverImage: base64Image,
+      games: [{ appId: 10, name: "Juego" }],
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("validateListCreate rejects excessively large base64 coverImage", () => {
+    const hugeBase64 = "data:image/png;base64," + "a".repeat(15 * 1024 * 1024);
+    const result = validateListCreate({
+      title: "Lista de prueba",
+      description: "Descripcion valida",
+      categories: ["RPG"],
+      coverImage: hugeBase64,
+      games: [{ appId: 10, name: "Juego" }],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((error) => error.field === "coverImage" && error.code === "too_long")).toBe(true);
+  });
+
   it("validateCommentCreate rejects long content", () => {
     const result = validateCommentCreate({
       content: "a".repeat(1001),
